@@ -22,6 +22,10 @@ export function distanceSquared(a: Point, b: Point): number {
 }
 
 export function moveToward(current: Point, target: Point, maxDistance: number): Point {
+  if (maxDistance <= 0) {
+    return { x: current.x, y: current.y };
+  }
+
   const dx = target.x - current.x;
   const dy = target.y - current.y;
   const distance = Math.hypot(dx, dy);

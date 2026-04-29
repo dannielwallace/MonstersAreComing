@@ -31,4 +31,12 @@ describe('moveToward', () => {
   it('stops exactly on the target when the step is large enough', () => {
     expect(moveToward({ x: 0, y: 0 }, { x: 2, y: 0 }, 3)).toEqual({ x: 2, y: 0 });
   });
+
+  it('does not move when max distance is zero', () => {
+    expect(moveToward({ x: 0, y: 0 }, { x: 10, y: 0 }, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('does not move when max distance is negative', () => {
+    expect(moveToward({ x: 0, y: 0 }, { x: 10, y: 0 }, -1)).toEqual({ x: 0, y: 0 });
+  });
 });
