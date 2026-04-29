@@ -28,6 +28,7 @@ const OVERLAY_DEPTH = 1000;
 const SPAWN_MARGIN = 96;
 const THREAT_RANGE = 260;
 const FEEDBACK_DURATION = 1.4;
+const FEEDBACK_Y = 236;
 const DAMAGE_FLASH_DURATION = 0.18;
 const CARAVAN_NORMAL_COLOR = 0x4caf50;
 const CARAVAN_DAMAGE_COLOR = 0xef4444;
@@ -105,7 +106,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.hud.setScrollFactor(0);
     this.hud.setDepth(OVERLAY_DEPTH);
-    this.feedbackText = this.add.text(18, 190, '', {
+    this.feedbackText = this.add.text(18, FEEDBACK_Y, '', {
       color: '#facc15',
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
       fontSize: '18px',
