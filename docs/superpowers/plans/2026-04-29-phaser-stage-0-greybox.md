@@ -42,13 +42,13 @@
 - Create: `src/main.ts`
 - Create: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Create npm project files**
+- [x] **Step 1: Create npm project files**
 
 Create `package.json`:
 
 ```json
 {
-  "name": "monsters-are-coming-greybox",
+  "name": "caravan-greybox",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -62,7 +62,6 @@ Create `package.json`:
     "phaser": "^3.90.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-basic-ssl": "^2.1.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.12",
     "vitest": "^3.2.4"
@@ -124,7 +123,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 2: Install dependencies**
+- [x] **Step 2: Install dependencies**
 
 Run:
 
@@ -134,7 +133,7 @@ npm install
 
 Expected: `package-lock.json` is created and npm exits successfully.
 
-- [ ] **Step 3: Add minimal Phaser boot files**
+- [x] **Step 3: Add minimal Phaser boot files**
 
 Create `src/scenes/GameScene.ts`:
 
@@ -174,7 +173,7 @@ const config: Phaser.Types.Core.GameConfig = {
 new Phaser.Game(config);
 ```
 
-- [ ] **Step 4: Verify build**
+- [x] **Step 4: Verify build**
 
 Run:
 
@@ -184,7 +183,7 @@ npm run build
 
 Expected: PASS. Vite writes `dist/`.
 
-- [ ] **Step 5: Commit scaffold**
+- [x] **Step 5: Commit scaffold**
 
 ```bash
 git add package.json package-lock.json index.html tsconfig.json vite.config.ts src/main.ts src/scenes/GameScene.ts
@@ -199,7 +198,7 @@ git commit -m "chore: scaffold phaser vite project"
 - Create: `tests/math.test.ts`
 - Create: `src/game/math.ts`
 
-- [ ] **Step 1: Write failing vector tests**
+- [x] **Step 1: Write failing vector tests**
 
 Create `tests/math.test.ts`:
 
@@ -240,7 +239,7 @@ describe('moveToward', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -250,7 +249,7 @@ npm test -- tests/math.test.ts
 
 Expected: FAIL because `src/game/math.ts` does not exist.
 
-- [ ] **Step 3: Implement math helpers**
+- [x] **Step 3: Implement math helpers**
 
 Create `src/game/math.ts`:
 
@@ -295,7 +294,7 @@ export function moveToward(current: Point, target: Point, maxDistance: number): 
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -305,7 +304,7 @@ npm test -- tests/math.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit math helpers**
+- [x] **Step 5: Commit math helpers**
 
 ```bash
 git add src/game/math.ts tests/math.test.ts
@@ -320,7 +319,7 @@ git commit -m "feat: add vector math helpers"
 - Create: `tests/inventory.test.ts`
 - Create: `src/game/inventory.ts`
 
-- [ ] **Step 1: Write failing inventory tests**
+- [x] **Step 1: Write failing inventory tests**
 
 Create `tests/inventory.test.ts`:
 
@@ -351,7 +350,7 @@ describe('inventory wood rules', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -361,7 +360,7 @@ npm test -- tests/inventory.test.ts
 
 Expected: FAIL because `src/game/inventory.ts` does not exist.
 
-- [ ] **Step 3: Implement inventory rules**
+- [x] **Step 3: Implement inventory rules**
 
 Create `src/game/inventory.ts`:
 
@@ -388,7 +387,7 @@ export function spendWood(currentWood: number, cost: number): SpendResult {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -398,7 +397,7 @@ npm test -- tests/inventory.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit inventory rules**
+- [x] **Step 5: Commit inventory rules**
 
 ```bash
 git add src/game/inventory.ts tests/inventory.test.ts
@@ -413,7 +412,7 @@ git commit -m "feat: add wood inventory rules"
 - Create: `tests/combat.test.ts`
 - Create: `src/game/combat.ts`
 
-- [ ] **Step 1: Write failing combat tests**
+- [x] **Step 1: Write failing combat tests**
 
 Create `tests/combat.test.ts`:
 
@@ -461,7 +460,7 @@ describe('applyDamage', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -471,7 +470,7 @@ npm test -- tests/combat.test.ts
 
 Expected: FAIL because `src/game/combat.ts` does not exist.
 
-- [ ] **Step 3: Implement combat rules**
+- [x] **Step 3: Implement combat rules**
 
 Create `src/game/combat.ts`:
 
@@ -522,7 +521,7 @@ export function applyDamage(currentHealth: number, damage: number): DamageResult
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -532,7 +531,7 @@ npm test -- tests/combat.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit combat rules**
+- [x] **Step 5: Commit combat rules**
 
 ```bash
 git add src/game/combat.ts tests/combat.test.ts
@@ -547,7 +546,7 @@ git commit -m "feat: add tower combat rules"
 - Create: `tests/spawnDirector.test.ts`
 - Create: `src/game/spawnDirector.ts`
 
-- [ ] **Step 1: Write failing spawn tests**
+- [x] **Step 1: Write failing spawn tests**
 
 Create `tests/spawnDirector.test.ts`:
 
@@ -588,7 +587,7 @@ describe('updateSpawnTimer', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -598,7 +597,7 @@ npm test -- tests/spawnDirector.test.ts
 
 Expected: FAIL because `src/game/spawnDirector.ts` does not exist.
 
-- [ ] **Step 3: Implement spawn director helpers**
+- [x] **Step 3: Implement spawn director helpers**
 
 Create `src/game/spawnDirector.ts`:
 
@@ -640,7 +639,7 @@ export function updateSpawnTimer(currentTimer: number, deltaSeconds: number, int
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -650,7 +649,7 @@ npm test -- tests/spawnDirector.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit spawn director**
+- [x] **Step 5: Commit spawn director**
 
 ```bash
 git add src/game/spawnDirector.ts tests/spawnDirector.test.ts
@@ -665,7 +664,7 @@ git commit -m "feat: add enemy spawn director rules"
 - Create: `tests/buildSlots.test.ts`
 - Create: `src/game/buildSlots.ts`
 
-- [ ] **Step 1: Write failing build slot tests**
+- [x] **Step 1: Write failing build slot tests**
 
 Create `tests/buildSlots.test.ts`:
 
@@ -696,7 +695,7 @@ describe('getSlotWorldPosition', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -706,7 +705,7 @@ npm test -- tests/buildSlots.test.ts
 
 Expected: FAIL because `src/game/buildSlots.ts` does not exist.
 
-- [ ] **Step 3: Implement build slot helpers**
+- [x] **Step 3: Implement build slot helpers**
 
 Create `src/game/buildSlots.ts`:
 
@@ -741,7 +740,7 @@ export function getSlotWorldPosition(caravanPosition: Point, slot: BuildSlot): P
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run:
 
@@ -751,7 +750,7 @@ npm test -- tests/buildSlots.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit build slots**
+- [x] **Step 5: Commit build slots**
 
 ```bash
 git add src/game/buildSlots.ts tests/buildSlots.test.ts
@@ -766,7 +765,7 @@ git commit -m "feat: add caravan tower build slots"
 - Modify: `src/scenes/GameScene.ts`
 - Modify: `src/main.ts`
 
-- [ ] **Step 1: Replace the placeholder scene with playable greybox code**
+- [x] **Step 1: Replace the placeholder scene with playable greybox code**
 
 Modify `src/scenes/GameScene.ts`:
 
@@ -1134,7 +1133,7 @@ const config: Phaser.Types.Core.GameConfig = {
 new Phaser.Game(config);
 ```
 
-- [ ] **Step 2: Run unit tests**
+- [x] **Step 2: Run unit tests**
 
 Run:
 
@@ -1144,7 +1143,7 @@ npm test
 
 Expected: PASS for all tests.
 
-- [ ] **Step 3: Run build**
+- [x] **Step 3: Run build**
 
 Run:
 
@@ -1154,7 +1153,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Start dev server for manual playtest**
+- [x] **Step 4: Start dev server for manual playtest**
 
 Run:
 
@@ -1165,6 +1164,8 @@ npm run dev
 Expected: Vite prints a local URL, normally `http://127.0.0.1:5173/`.
 
 - [ ] **Step 5: Manual playtest**
+
+HTTP smoke verification passed, but interactive browser playtest is left for the user on the running dev server.
 
 Open the local URL and verify:
 
@@ -1177,7 +1178,7 @@ Open the local URL and verify:
 - Game over appears when caravan health reaches 0.
 - Pressing `R` restarts after game over.
 
-- [ ] **Step 6: Commit playable scene**
+- [x] **Step 6: Commit playable scene**
 
 ```bash
 git add src/scenes/GameScene.ts src/main.ts
@@ -1192,7 +1193,7 @@ git commit -m "feat: build stage 0 playable greybox"
 - Create: `README.md`
 - Modify: `docs/superpowers/plans/2026-04-29-phaser-stage-0-greybox.md`
 
-- [ ] **Step 1: Create README**
+- [x] **Step 1: Create README**
 
 Create `README.md`:
 
@@ -1224,7 +1225,7 @@ Stage 0 Phaser greybox prototype for a moving-base survival defense loop.
 Gather wood away from the moving caravan, build towers around it, and survive as long as possible while enemies attack the caravan.
 ```
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -1235,7 +1236,7 @@ npm run build
 
 Expected: both commands PASS.
 
-- [ ] **Step 3: Check git status**
+- [x] **Step 3: Check git status**
 
 Run:
 
@@ -1245,7 +1246,7 @@ git status --short
 
 Expected: only intentional untracked files remain, such as pre-existing research docs if they were not part of the implementation commits.
 
-- [ ] **Step 4: Commit README and completed plan updates**
+- [x] **Step 4: Commit README and completed plan updates**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-04-29-phaser-stage-0-greybox.md

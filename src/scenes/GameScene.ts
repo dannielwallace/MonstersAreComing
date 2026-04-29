@@ -21,6 +21,7 @@ const ENEMY_CONTACT_DAMAGE = 5;
 const ENEMY_DAMAGE_COOLDOWN = 1;
 const WORLD_WIDTH = 12000;
 const OVERLAY_DEPTH = 1000;
+const SPAWN_MARGIN = 96;
 
 interface WoodNode {
   id: string;
@@ -268,8 +269,10 @@ export class GameScene extends Phaser.Scene {
 
   private spawnEnemy(): void {
     const sideOffset = (this.enemySequence % 3) - 1;
+    const cameraRightEdge = this.cameras.main.worldView.right;
+    const forwardSpawnX = cameraRightEdge + SPAWN_MARGIN + (this.enemySequence % 2) * 160;
     const position = {
-      x: this.caravanPosition.x + 720 + (this.enemySequence % 2) * 160,
+      x: Math.min(forwardSpawnX, WORLD_WIDTH - SPAWN_MARGIN),
       y: Phaser.Math.Clamp(this.caravanPosition.y + sideOffset * 210, 60, 660),
     };
     const shape = this.add.circle(position.x, position.y, 13, 0xef4444);
