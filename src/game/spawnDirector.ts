@@ -20,6 +20,13 @@ export function getSpawnInterval(elapsedSeconds: number): number {
 }
 
 export function updateSpawnTimer(currentTimer: number, deltaSeconds: number, interval: number): SpawnTimerResult {
+  if (!Number.isFinite(interval) || interval <= 0 || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+    return {
+      timer: currentTimer,
+      spawnCount: 0,
+    };
+  }
+
   let timer = currentTimer + deltaSeconds;
   let spawnCount = 0;
 
@@ -29,7 +36,7 @@ export function updateSpawnTimer(currentTimer: number, deltaSeconds: number, int
   }
 
   return {
-    timer: Number(timer.toFixed(6)),
+    timer,
     spawnCount,
   };
 }
