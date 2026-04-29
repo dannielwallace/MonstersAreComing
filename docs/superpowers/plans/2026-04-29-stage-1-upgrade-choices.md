@@ -897,7 +897,7 @@ git commit -m "feat: add upgrade choice overlay"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md`
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run:
 
@@ -907,7 +907,9 @@ npm test
 
 Expected: PASS, including `tests/experience.test.ts` and `tests/upgrades.test.ts`.
 
-- [ ] **Step 2: Run production build**
+Result: PASS, 9 test files / 73 tests.
+
+- [x] **Step 2: Run production build**
 
 Run:
 
@@ -917,7 +919,9 @@ npm run build
 
 Expected: PASS. The existing Phaser/Vite chunk-size warning can remain if the build exits with code 0.
 
-- [ ] **Step 3: Start a local dev server**
+Result: PASS, build exited 0 with the existing Phaser/Vite chunk-size warning.
+
+- [x] **Step 3: Start a local dev server**
 
 Run:
 
@@ -927,7 +931,9 @@ npm run dev -- --port 5176
 
 Expected: Vite prints a local URL such as `http://127.0.0.1:5176/`.
 
-- [ ] **Step 4: Perform manual upgrade smoke check**
+Result: Port 5176 was already busy, so this smoke run started Vite on `http://127.0.0.1:5177/` and confirmed HTTP 200.
+
+- [x] **Step 4: Perform manual upgrade smoke check**
 
 Use the running browser game and verify:
 
@@ -943,11 +949,15 @@ Use the running browser game and verify:
 - After choosing, enemies, towers, gathering, spawning, and the timer continue.
 - Pressing `R` after game over restarts with `等级：1` and `经验：0/20`.
 
-- [ ] **Step 5: Stop the dev server**
+Result: Headless Edge/CDP smoke confirmed the game canvas boots at 1280x720. A forced pending level-up opened the upgrade overlay with `选择升级`, `按 1 / 2 / 3 选择`, and three Chinese upgrade choices. Programmatic selection closed the overlay, consumed the pending level-up, changed stats, and updated the HUD to `等级：2` / `经验：0/32`. This was not a full natural playthrough from enemy kills to 20 XP.
+
+- [x] **Step 5: Stop the dev server**
 
 Stop the Vite process started in Step 3.
 
-- [ ] **Step 6: Commit completed plan checklist**
+Result: Stopped the Vite server started on 5177 and the headless Edge CDP process.
+
+- [x] **Step 6: Commit completed plan checklist**
 
 After checking off completed plan steps:
 
