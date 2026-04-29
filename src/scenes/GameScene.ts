@@ -19,6 +19,8 @@ const ENEMY_SPEED = 72;
 const ENEMY_CONTACT_RANGE = 34;
 const ENEMY_CONTACT_DAMAGE = 5;
 const ENEMY_DAMAGE_COOLDOWN = 1;
+const WORLD_WIDTH = 12000;
+const OVERLAY_DEPTH = 1000;
 
 interface WoodNode {
   id: string;
@@ -71,9 +73,9 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.resetState();
-    this.cameras.main.setBounds(0, 0, 5200, 720);
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, 720);
 
-    this.add.grid(2600, 360, 5200, 720, 64, 64, 0x24313d, 0.35, 0x334452, 0.45);
+    this.add.grid(WORLD_WIDTH / 2, 360, WORLD_WIDTH, 720, 64, 64, 0x24313d, 0.35, 0x334452, 0.45);
     this.player = this.add.circle(this.playerPosition.x, this.playerPosition.y, 14, 0x42a5f5);
     this.caravan = this.add.rectangle(this.caravanPosition.x, this.caravanPosition.y, 86, 54, 0x4caf50);
     this.hud = this.add.text(18, 18, '', {
@@ -83,6 +85,7 @@ export class GameScene extends Phaser.Scene {
       lineSpacing: 6,
     });
     this.hud.setScrollFactor(0);
+    this.hud.setDepth(OVERLAY_DEPTH);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,SPACE,R') as Record<
@@ -203,12 +206,13 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const gathered = Math.min(node.remaining, GATHER_RATE * deltaSeconds);
+      const gatherAmount = GATHER_RATE * deltaSeconds;
+      const gathered = node.remaining <= gatherAmount ? node.remaining : gatherAmount;
       node.remaining -= gathered;
       this.wood = addWood(this.wood, gathered);
       node.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
 
-      if (node.remaining <= 0.01) {
+      if (node.remaining <= 0) {
         node.shape.destroy();
         node.label.destroy();
         this.woodNodes = this.woodNodes.filter((candidate) => candidate.id !== node.id);
@@ -354,5 +358,6 @@ export class GameScene extends Phaser.Scene {
     );
     this.gameOverText.setOrigin(0.5);
     this.gameOverText.setScrollFactor(0);
+    this.gameOverText.setDepth(OVERLAY_DEPTH);
   }
 }
