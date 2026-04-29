@@ -3,6 +3,7 @@ import { getSlotWorldPosition, selectNextOpenSlot, STAGE0_BUILD_SLOTS } from '..
 import { applyDamage, selectNearestTarget } from '../game/combat';
 import { addWood, spendWood } from '../game/inventory';
 import { distanceSquared, moveToward, normalizeInput, type Point } from '../game/math';
+import { getObjectiveText } from '../game/objective';
 import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
 
 const PLAYER_SPEED = 245;
@@ -22,6 +23,11 @@ const ENEMY_DAMAGE_COOLDOWN = 1;
 const WORLD_WIDTH = 12000;
 const OVERLAY_DEPTH = 1000;
 const SPAWN_MARGIN = 96;
+const THREAT_RANGE = 260;
+const FEEDBACK_DURATION = 1.4;
+const DAMAGE_FLASH_DURATION = 0.18;
+const CARAVAN_NORMAL_COLOR = 0x4caf50;
+const CARAVAN_DAMAGE_COLOR = 0xef4444;
 
 interface WoodNode {
   id: string;
@@ -54,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Arc;
   private caravan!: Phaser.GameObjects.Rectangle;
   private hud!: Phaser.GameObjects.Text;
+  private feedbackText!: Phaser.GameObjects.Text;
   private gameOverText?: Phaser.GameObjects.Text;
   private playerPosition: Point = { x: 120, y: 360 };
   private caravanPosition: Point = { x: 220, y: 360 };
@@ -61,6 +68,8 @@ export class GameScene extends Phaser.Scene {
   private wood = 0;
   private elapsedSeconds = 0;
   private spawnTimer = 0;
+  private feedbackTimer = 0;
+  private caravanDamageFlashTimer = 0;
   private enemySequence = 0;
   private towerSequence = 0;
   private gameOver = false;
@@ -78,15 +87,22 @@ export class GameScene extends Phaser.Scene {
 
     this.add.grid(WORLD_WIDTH / 2, 360, WORLD_WIDTH, 720, 64, 64, 0x24313d, 0.35, 0x334452, 0.45);
     this.player = this.add.circle(this.playerPosition.x, this.playerPosition.y, 14, 0x42a5f5);
-    this.caravan = this.add.rectangle(this.caravanPosition.x, this.caravanPosition.y, 86, 54, 0x4caf50);
+    this.caravan = this.add.rectangle(this.caravanPosition.x, this.caravanPosition.y, 86, 54, CARAVAN_NORMAL_COLOR);
     this.hud = this.add.text(18, 18, '', {
       color: '#f8fafc',
-      fontFamily: 'monospace',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
       fontSize: '18px',
       lineSpacing: 6,
     });
     this.hud.setScrollFactor(0);
     this.hud.setDepth(OVERLAY_DEPTH);
+    this.feedbackText = this.add.text(18, 154, '', {
+      color: '#facc15',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '18px',
+    });
+    this.feedbackText.setScrollFactor(0);
+    this.feedbackText.setDepth(OVERLAY_DEPTH);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys('W,A,S,D,SPACE,R') as Record<
@@ -117,6 +133,7 @@ export class GameScene extends Phaser.Scene {
     this.updateEnemies(deltaSeconds);
     this.updateTowers(deltaSeconds);
     this.updateCamera();
+    this.updateFeedback(deltaSeconds);
     this.updateHud();
 
     if (this.caravanHealth <= 0) {
@@ -131,6 +148,8 @@ export class GameScene extends Phaser.Scene {
     this.wood = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 0;
+    this.feedbackTimer = 0;
+    this.caravanDamageFlashTimer = 0;
     this.enemySequence = 0;
     this.towerSequence = 0;
     this.gameOver = false;
@@ -202,6 +221,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateGathering(deltaSeconds: number): void {
+    let gatheredThisFrame = false;
+
     for (const node of [...this.woodNodes]) {
       if (distanceSquared(this.playerPosition, node.position) > GATHER_RANGE * GATHER_RANGE) {
         continue;
@@ -211,6 +232,9 @@ export class GameScene extends Phaser.Scene {
       const gathered = node.remaining <= gatherAmount ? node.remaining : gatherAmount;
       node.remaining -= gathered;
       this.wood = addWood(this.wood, gathered);
+      if (gathered > 0) {
+        gatheredThisFrame = true;
+      }
       node.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
 
       if (node.remaining <= 0) {
@@ -218,6 +242,10 @@ export class GameScene extends Phaser.Scene {
         node.label.destroy();
         this.woodNodes = this.woodNodes.filter((candidate) => candidate.id !== node.id);
       }
+    }
+
+    if (gatheredThisFrame) {
+      this.showFeedback(`采集中 +${GATHER_RATE}/秒`, '#bbf7d0');
     }
   }
 
@@ -229,6 +257,7 @@ export class GameScene extends Phaser.Scene {
     const occupiedSlots = new Set(this.towers.map((tower) => tower.slotId));
     const slotId = selectNextOpenSlot(STAGE0_BUILD_SLOTS, occupiedSlots);
     if (slotId === undefined) {
+      this.showFeedback('箭塔槽位已满', '#fde68a');
       return;
     }
 
@@ -239,6 +268,7 @@ export class GameScene extends Phaser.Scene {
 
     const spendResult = spendWood(this.wood, TOWER_COST);
     if (!spendResult.ok) {
+      this.showFeedback(`木材不足，需要 ${TOWER_COST}`, '#fde68a');
       return;
     }
 
@@ -296,6 +326,8 @@ export class GameScene extends Phaser.Scene {
       if (isTouchingCaravan && enemy.damageTimer <= 0) {
         this.caravanHealth = Math.max(0, this.caravanHealth - ENEMY_CONTACT_DAMAGE);
         enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
+        this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
+        this.showFeedback('行城遭到攻击！', '#fecaca');
       }
     }
   }
@@ -335,13 +367,49 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.centerOn(focusX, focusY);
   }
 
+  private hasOpenTowerSlot(): boolean {
+    const occupiedSlots = new Set(this.towers.map((tower) => tower.slotId));
+    return selectNextOpenSlot(STAGE0_BUILD_SLOTS, occupiedSlots) !== undefined;
+  }
+
+  private isCaravanThreatened(): boolean {
+    const threatRangeSquared = THREAT_RANGE * THREAT_RANGE;
+    return this.enemies.some(
+      (enemy) => enemy.health > 0 && distanceSquared(enemy.position, this.caravanPosition) <= threatRangeSquared,
+    );
+  }
+
+  private showFeedback(message: string, color = '#facc15'): void {
+    this.feedbackText.setText(message);
+    this.feedbackText.setColor(color);
+    this.feedbackTimer = FEEDBACK_DURATION;
+  }
+
+  private updateFeedback(deltaSeconds: number): void {
+    this.feedbackTimer = Math.max(0, this.feedbackTimer - deltaSeconds);
+    if (this.feedbackTimer <= 0) {
+      this.feedbackText.setText('');
+    }
+
+    this.caravanDamageFlashTimer = Math.max(0, this.caravanDamageFlashTimer - deltaSeconds);
+    this.caravan.setFillStyle(this.caravanDamageFlashTimer > 0 ? CARAVAN_DAMAGE_COLOR : CARAVAN_NORMAL_COLOR);
+  }
+
   private updateHud(): void {
+    const objective = getObjectiveText({
+      wood: this.wood,
+      towerCost: TOWER_COST,
+      hasOpenTowerSlot: this.hasOpenTowerSlot(),
+      caravanThreatened: this.isCaravanThreatened(),
+    });
+
     this.hud.setText([
-      `Caravan HP: ${this.caravanHealth}/${CARAVAN_MAX_HEALTH}`,
-      `Wood: ${Math.floor(this.wood)}`,
-      `Time: ${this.elapsedSeconds.toFixed(1)}s`,
-      `Towers: ${this.towers.length}/${STAGE0_BUILD_SLOTS.length}`,
-      `Space: Tower (${TOWER_COST} wood)`,
+      `行城生命：${this.caravanHealth}/${CARAVAN_MAX_HEALTH}`,
+      `木材：${Math.floor(this.wood)}`,
+      `时间：${this.elapsedSeconds.toFixed(1)} 秒`,
+      `箭塔：${this.towers.length}/${STAGE0_BUILD_SLOTS.length}`,
+      `空格：建造箭塔（${TOWER_COST} 木材）`,
+      objective,
     ]);
   }
 
@@ -350,11 +418,11 @@ export class GameScene extends Phaser.Scene {
     this.gameOverText = this.add.text(
       640,
       320,
-      `Caravan Destroyed\nSurvived: ${this.elapsedSeconds.toFixed(1)}s\nPress R to restart`,
+      `行城被摧毁\n坚持时间：${this.elapsedSeconds.toFixed(1)} 秒\n按 R 重新开始`,
       {
         align: 'center',
         color: '#fee2e2',
-        fontFamily: 'monospace',
+        fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
         fontSize: '34px',
         lineSpacing: 12,
       },
