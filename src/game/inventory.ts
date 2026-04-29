@@ -4,11 +4,15 @@ export interface SpendResult {
 }
 
 export function addWood(currentWood: number, gatheredAmount: number): number {
-  return Math.floor(currentWood + gatheredAmount);
+  if (!Number.isFinite(gatheredAmount) || gatheredAmount <= 0) {
+    return currentWood;
+  }
+
+  return currentWood + gatheredAmount;
 }
 
 export function canSpendWood(currentWood: number, cost: number): boolean {
-  return currentWood >= cost;
+  return Number.isFinite(currentWood) && Number.isFinite(cost) && cost > 0 && currentWood >= cost;
 }
 
 export function spendWood(currentWood: number, cost: number): SpendResult {
