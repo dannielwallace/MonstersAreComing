@@ -27,7 +27,7 @@
 - Create: `src/game/experience.ts`
 - Create: `tests/experience.test.ts`
 
-- [ ] **Step 1: Write the failing experience tests**
+- [x] **Step 1: Write the failing experience tests**
 
 Create `tests/experience.test.ts`:
 
@@ -107,7 +107,7 @@ describe('experience progression', () => {
 });
 ```
 
-- [ ] **Step 2: Run the experience tests and confirm RED**
+- [x] **Step 2: Run the experience tests and confirm RED**
 
 Run:
 
@@ -117,7 +117,7 @@ npm test -- tests/experience.test.ts
 
 Expected: FAIL because `src/game/experience.ts` does not exist.
 
-- [ ] **Step 3: Implement the experience module**
+- [x] **Step 3: Implement the experience module**
 
 Create `src/game/experience.ts`:
 
@@ -173,7 +173,7 @@ export function hasPendingLevelUp(state: ExperienceState): boolean {
 }
 ```
 
-- [ ] **Step 4: Run the experience tests and confirm GREEN**
+- [x] **Step 4: Run the experience tests and confirm GREEN**
 
 Run:
 
@@ -183,7 +183,7 @@ npm test -- tests/experience.test.ts
 
 Expected: PASS, 10 tests.
 
-- [ ] **Step 5: Commit experience rules**
+- [x] **Step 5: Commit experience rules**
 
 ```bash
 git add src/game/experience.ts tests/experience.test.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
@@ -198,7 +198,7 @@ git commit -m "feat: add experience progression rules"
 - Create: `src/game/upgrades.ts`
 - Create: `tests/upgrades.test.ts`
 
-- [ ] **Step 1: Write the failing upgrade tests**
+- [x] **Step 1: Write the failing upgrade tests**
 
 Create `tests/upgrades.test.ts`:
 
@@ -281,7 +281,7 @@ describe('applyUpgrade', () => {
 });
 ```
 
-- [ ] **Step 2: Run the upgrade tests and confirm RED**
+- [x] **Step 2: Run the upgrade tests and confirm RED**
 
 Run:
 
@@ -291,7 +291,7 @@ npm test -- tests/upgrades.test.ts
 
 Expected: FAIL because `src/game/upgrades.ts` does not exist.
 
-- [ ] **Step 3: Implement the upgrade module**
+- [x] **Step 3: Implement the upgrade module**
 
 Create `src/game/upgrades.ts`:
 
@@ -426,7 +426,7 @@ export function applyUpgrade(stats: RunStats, upgradeId: UpgradeId): RunStats {
 }
 ```
 
-- [ ] **Step 4: Run the upgrade tests and confirm GREEN**
+- [x] **Step 4: Run the upgrade tests and confirm GREEN**
 
 Run:
 
@@ -436,7 +436,7 @@ npm test -- tests/upgrades.test.ts
 
 Expected: PASS, 11 tests.
 
-- [ ] **Step 5: Commit upgrade rules**
+- [x] **Step 5: Commit upgrade rules**
 
 ```bash
 git add src/game/upgrades.ts tests/upgrades.test.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
@@ -450,7 +450,7 @@ git commit -m "feat: add upgrade rule pool"
 **Files:**
 - Modify: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Update imports and remove upgraded constants**
+- [x] **Step 1: Update imports and remove upgraded constants**
 
 In `src/scenes/GameScene.ts`, add imports:
 
@@ -479,7 +479,7 @@ const TOWER_FIRE_INTERVAL = 0.55;
 const TOWER_DAMAGE = 10;
 ```
 
-- [ ] **Step 2: Add key and upgrade fields**
+- [x] **Step 2: Add key and upgrade fields**
 
 Add this type near the entity interfaces:
 
@@ -503,7 +503,7 @@ Replace `private caravanHealth = CARAVAN_MAX_HEALTH;` with:
   private upgradeOverlay?: Phaser.GameObjects.Container;
 ```
 
-- [ ] **Step 3: Register number keys**
+- [x] **Step 3: Register number keys**
 
 Replace the current `this.keys = this.input.keyboard!.addKeys(...)` block in `create()` with:
 
@@ -521,7 +521,7 @@ Replace the current `this.keys = this.input.keyboard!.addKeys(...)` block in `cr
     }) as Record<GameKey, Phaser.Input.Keyboard.Key>;
 ```
 
-- [ ] **Step 4: Reset runtime stats and upgrade state**
+- [x] **Step 4: Reset runtime stats and upgrade state**
 
 In `resetState()`, replace the caravan health reset with:
 
@@ -533,7 +533,7 @@ In `resetState()`, replace the caravan health reset with:
     this.upgradeOverlay = undefined;
 ```
 
-- [ ] **Step 5: Replace fixed stats in gathering, building, combat, and damage**
+- [x] **Step 5: Replace fixed stats in gathering, building, combat, and damage**
 
 In `updateGathering()`, replace fixed gathering values:
 
@@ -573,7 +573,7 @@ In `updateTowers()`, replace tower targeting, damage, and fire interval:
       tower.fireTimer = this.stats.towerFireInterval;
 ```
 
-- [ ] **Step 6: Award XP on enemy death**
+- [x] **Step 6: Award XP on enemy death**
 
 In `updateTowers()`, after removing a dead enemy, call `awardEnemyExperience()`:
 
@@ -597,7 +597,7 @@ Add this helper method:
   }
 ```
 
-- [ ] **Step 7: Add stat formatting and upgrade visual refresh helpers**
+- [x] **Step 7: Add stat formatting and upgrade visual refresh helpers**
 
 Add these helper methods:
 
@@ -613,7 +613,7 @@ Add these helper methods:
   }
 ```
 
-- [ ] **Step 8: Update HUD and game-over health references**
+- [x] **Step 8: Update HUD and game-over health references**
 
 Replace the caravan health line in `updateHud()` and add level/XP lines:
 
@@ -638,7 +638,7 @@ Replace the game-over check in `update()`:
     }
 ```
 
-- [ ] **Step 9: Run scene type-check through build**
+- [x] **Step 9: Run scene type-check through build**
 
 Run:
 
@@ -648,7 +648,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit runtime stats and XP hooks**
+- [x] **Step 10: Commit runtime stats and XP hooks**
 
 ```bash
 git add src/scenes/GameScene.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
@@ -662,7 +662,7 @@ git commit -m "feat: award experience from enemy kills"
 **Files:**
 - Modify: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Add upgrade selection imports**
+- [x] **Step 1: Add upgrade selection imports**
 
 Update the existing experience import:
 
@@ -691,7 +691,7 @@ import {
 } from '../game/upgrades';
 ```
 
-- [ ] **Step 2: Pause the simulation while choosing an upgrade**
+- [x] **Step 2: Pause the simulation while choosing an upgrade**
 
 In `update()`, after the game-over block and before `this.elapsedSeconds += deltaSeconds`, add:
 
@@ -703,7 +703,7 @@ In `update()`, after the game-over block and before `this.elapsedSeconds += delt
     }
 ```
 
-- [ ] **Step 3: Add upgrade choice opening logic**
+- [x] **Step 3: Add upgrade choice opening logic**
 
 Add this method:
 
@@ -724,7 +724,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 4: Open upgrade choices after XP gain**
+- [x] **Step 4: Open upgrade choices after XP gain**
 
 Update `awardEnemyExperience()`:
 
@@ -739,7 +739,7 @@ Update `awardEnemyExperience()`:
   }
 ```
 
-- [ ] **Step 5: Add number-key selection**
+- [x] **Step 5: Add number-key selection**
 
 Add this method:
 
@@ -761,7 +761,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 6: Add upgrade overlay rendering**
+- [x] **Step 6: Add upgrade overlay rendering**
 
 Add this method:
 
@@ -824,7 +824,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 7: Add overlay cleanup and selection application**
+- [x] **Step 7: Add overlay cleanup and selection application**
 
 Add these methods:
 
@@ -859,7 +859,7 @@ Add these methods:
   }
 ```
 
-- [ ] **Step 8: Ensure restart cleanup is explicit**
+- [x] **Step 8: Ensure restart cleanup is explicit**
 
 In `resetState()`, call cleanup before clearing upgrade fields:
 
@@ -872,7 +872,7 @@ In `resetState()`, call cleanup before clearing upgrade fields:
 
 If `hideUpgradeOverlay()` is called before `this.upgradeOverlay` exists during the first scene creation, it safely returns.
 
-- [ ] **Step 9: Run full automated verification**
+- [x] **Step 9: Run full automated verification**
 
 Run:
 
@@ -883,7 +883,7 @@ npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 10: Commit upgrade overlay**
+- [x] **Step 10: Commit upgrade overlay**
 
 ```bash
 git add src/scenes/GameScene.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
@@ -897,7 +897,7 @@ git commit -m "feat: add upgrade choice overlay"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md`
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run:
 
@@ -907,7 +907,9 @@ npm test
 
 Expected: PASS, including `tests/experience.test.ts` and `tests/upgrades.test.ts`.
 
-- [ ] **Step 2: Run production build**
+Result: PASS, 9 test files / 73 tests.
+
+- [x] **Step 2: Run production build**
 
 Run:
 
@@ -917,7 +919,9 @@ npm run build
 
 Expected: PASS. The existing Phaser/Vite chunk-size warning can remain if the build exits with code 0.
 
-- [ ] **Step 3: Start a local dev server**
+Result: PASS, build exited 0 with the existing Phaser/Vite chunk-size warning.
+
+- [x] **Step 3: Start a local dev server**
 
 Run:
 
@@ -927,7 +931,9 @@ npm run dev -- --port 5176
 
 Expected: Vite prints a local URL such as `http://127.0.0.1:5176/`.
 
-- [ ] **Step 4: Perform manual upgrade smoke check**
+Result: Port 5176 was already busy, so this smoke run started Vite on `http://127.0.0.1:5177/` and confirmed HTTP 200.
+
+- [x] **Step 4: Perform manual upgrade smoke check**
 
 Use the running browser game and verify:
 
@@ -943,11 +949,15 @@ Use the running browser game and verify:
 - After choosing, enemies, towers, gathering, spawning, and the timer continue.
 - Pressing `R` after game over restarts with `等级：1` and `经验：0/20`.
 
-- [ ] **Step 5: Stop the dev server**
+Result: Headless Edge/CDP smoke confirmed the game canvas boots at 1280x720. A forced pending level-up opened the upgrade overlay with `选择升级`, `按 1 / 2 / 3 选择`, and three Chinese upgrade choices. Programmatic selection closed the overlay, consumed the pending level-up, changed stats, and updated the HUD to `等级：2` / `经验：0/32`. This was not a full natural playthrough from enemy kills to 20 XP.
+
+- [x] **Step 5: Stop the dev server**
 
 Stop the Vite process started in Step 3.
 
-- [ ] **Step 6: Commit completed plan checklist**
+Result: Stopped the Vite server started on 5177 and the headless Edge CDP process.
+
+- [x] **Step 6: Commit completed plan checklist**
 
 After checking off completed plan steps:
 

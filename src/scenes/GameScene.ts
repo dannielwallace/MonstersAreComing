@@ -5,16 +5,28 @@ import { addWood, spendWood } from '../game/inventory';
 import { distanceSquared, moveToward, normalizeInput, type Point } from '../game/math';
 import { getObjectiveText } from '../game/objective';
 import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
+import {
+  addExperience,
+  consumePendingLevelUp,
+  createExperienceState,
+  ENEMY_EXPERIENCE_REWARD,
+  hasPendingLevelUp,
+  requiredExperienceForLevel,
+  type ExperienceState,
+} from '../game/experience';
+import {
+  applyUpgrade,
+  DEFAULT_RUN_STATS,
+  pickUpgradeChoices,
+  UPGRADE_POOL,
+  type RunStats,
+  type UpgradeDefinition,
+} from '../game/upgrades';
 
 const PLAYER_SPEED = 245;
 const CARAVAN_SPEED = 24;
-const CARAVAN_MAX_HEALTH = 100;
 const GATHER_RANGE = 34;
-const GATHER_RATE = 8;
 const TOWER_COST = 20;
-const TOWER_RANGE = 190;
-const TOWER_FIRE_INTERVAL = 0.55;
-const TOWER_DAMAGE = 10;
 const ENEMY_HEALTH = 30;
 const ENEMY_SPEED = 72;
 const ENEMY_CONTACT_RANGE = 34;
@@ -25,6 +37,8 @@ const OVERLAY_DEPTH = 1000;
 const SPAWN_MARGIN = 96;
 const THREAT_RANGE = 260;
 const FEEDBACK_DURATION = 1.4;
+const UPGRADE_INPUT_COOLDOWN = 0.2;
+const FEEDBACK_Y = 236;
 const DAMAGE_FLASH_DURATION = 0.18;
 const CARAVAN_NORMAL_COLOR = 0x4caf50;
 const CARAVAN_DAMAGE_COLOR = 0xef4444;
@@ -54,9 +68,11 @@ interface Tower {
   rangeShape: Phaser.GameObjects.Arc;
 }
 
+type GameKey = 'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R' | 'ONE' | 'TWO' | 'THREE';
+
 export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<GameKey, Phaser.Input.Keyboard.Key>;
   private player!: Phaser.GameObjects.Arc;
   private caravan!: Phaser.GameObjects.Rectangle;
   private hud!: Phaser.GameObjects.Text;
@@ -64,7 +80,12 @@ export class GameScene extends Phaser.Scene {
   private gameOverText?: Phaser.GameObjects.Text;
   private playerPosition: Point = { x: 120, y: 360 };
   private caravanPosition: Point = { x: 220, y: 360 };
-  private caravanHealth = CARAVAN_MAX_HEALTH;
+  private stats: RunStats = { ...DEFAULT_RUN_STATS };
+  private experience: ExperienceState = createExperienceState();
+  private upgradeSelecting = false;
+  private upgradeInputCooldown = 0;
+  private upgradeChoices: UpgradeDefinition[] = [];
+  private upgradeOverlay?: Phaser.GameObjects.Container;
   private wood = 0;
   private elapsedSeconds = 0;
   private spawnTimer = 0;
@@ -96,7 +117,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.hud.setScrollFactor(0);
     this.hud.setDepth(OVERLAY_DEPTH);
-    this.feedbackText = this.add.text(18, 190, '', {
+    this.feedbackText = this.add.text(18, FEEDBACK_Y, '', {
       color: '#facc15',
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
       fontSize: '18px',
@@ -105,10 +126,17 @@ export class GameScene extends Phaser.Scene {
     this.feedbackText.setDepth(OVERLAY_DEPTH);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,SPACE,R') as Record<
-      'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R',
-      Phaser.Input.Keyboard.Key
-    >;
+    this.keys = this.input.keyboard!.addKeys({
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      S: Phaser.Input.Keyboard.KeyCodes.S,
+      D: Phaser.Input.Keyboard.KeyCodes.D,
+      SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE,
+      R: Phaser.Input.Keyboard.KeyCodes.R,
+      ONE: Phaser.Input.Keyboard.KeyCodes.ONE,
+      TWO: Phaser.Input.Keyboard.KeyCodes.TWO,
+      THREE: Phaser.Input.Keyboard.KeyCodes.THREE,
+    }) as Record<GameKey, Phaser.Input.Keyboard.Key>;
 
     this.createWoodNodes();
     this.updateHud();
@@ -124,6 +152,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (this.upgradeSelecting) {
+      this.upgradeInputCooldown = Math.max(0, this.upgradeInputCooldown - deltaSeconds);
+      this.updateUpgradeInput();
+      this.updateHud();
+      return;
+    }
+
     this.elapsedSeconds += deltaSeconds;
     this.updatePlayer(deltaSeconds);
     this.updateCaravan(deltaSeconds);
@@ -136,7 +171,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFeedback(deltaSeconds);
     this.updateHud();
 
-    if (this.caravanHealth <= 0) {
+    if (this.stats.caravanHealth <= 0) {
       this.showGameOver();
     }
   }
@@ -144,7 +179,13 @@ export class GameScene extends Phaser.Scene {
   private resetState(): void {
     this.playerPosition = { x: 120, y: 360 };
     this.caravanPosition = { x: 220, y: 360 };
-    this.caravanHealth = CARAVAN_MAX_HEALTH;
+    this.stats = { ...DEFAULT_RUN_STATS };
+    this.experience = createExperienceState();
+    this.hideUpgradeOverlay();
+    this.upgradeSelecting = false;
+    this.upgradeInputCooldown = 0;
+    this.upgradeChoices = [];
+    this.upgradeOverlay = undefined;
     this.wood = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 0;
@@ -228,7 +269,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const gatherAmount = GATHER_RATE * deltaSeconds;
+      const gatherAmount = this.stats.gatherRate * deltaSeconds;
       const gathered = node.remaining <= gatherAmount ? node.remaining : gatherAmount;
       node.remaining -= gathered;
       this.wood = addWood(this.wood, gathered);
@@ -245,7 +286,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (gatheredThisFrame && this.feedbackTimer <= 0) {
-      this.showFeedback(`采集中 +${GATHER_RATE}/秒`, '#bbf7d0');
+      this.showFeedback(`采集中 +${this.formatNumber(this.stats.gatherRate)}/秒`, '#bbf7d0');
     }
   }
 
@@ -274,7 +315,7 @@ export class GameScene extends Phaser.Scene {
 
     this.wood = spendResult.wood;
     const position = getSlotWorldPosition(this.caravanPosition, slot);
-    const rangeShape = this.add.circle(position.x, position.y, TOWER_RANGE, 0xffffff, 0);
+    const rangeShape = this.add.circle(position.x, position.y, this.stats.towerRange, 0xffffff, 0);
     rangeShape.setStrokeStyle(1, 0x94a3b8, 0.35);
     const shape = this.add.rectangle(position.x, position.y, 24, 24, 0x9ca3af);
     this.towers.push({
@@ -324,7 +365,7 @@ export class GameScene extends Phaser.Scene {
       const isTouchingCaravan =
         distanceSquared(enemy.position, this.caravanPosition) <= ENEMY_CONTACT_RANGE * ENEMY_CONTACT_RANGE;
       if (isTouchingCaravan && enemy.damageTimer <= 0) {
-        this.caravanHealth = Math.max(0, this.caravanHealth - ENEMY_CONTACT_DAMAGE);
+        this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - ENEMY_CONTACT_DAMAGE);
         enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
         this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
         this.showFeedback('行城遭到攻击！', '#fecaca');
@@ -339,20 +380,65 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const target = selectNearestTarget(tower.position, this.enemies, TOWER_RANGE);
+      const target = selectNearestTarget(tower.position, this.enemies, this.stats.towerRange);
       if (!target) {
         continue;
       }
 
-      const result = applyDamage(target.health, TOWER_DAMAGE);
+      const result = applyDamage(target.health, this.stats.towerDamage);
       target.health = result.health;
       this.drawShot(tower.position, target.position);
-      tower.fireTimer = TOWER_FIRE_INTERVAL;
+      tower.fireTimer = this.stats.towerFireInterval;
 
       if (result.dead) {
         target.shape.destroy();
         this.enemies = this.enemies.filter((enemy) => enemy.id !== target.id);
+        this.awardEnemyExperience();
       }
+    }
+  }
+
+  private awardEnemyExperience(): void {
+    if (this.gameOver || this.stats.caravanHealth <= 0) {
+      return;
+    }
+
+    this.experience = addExperience(this.experience, ENEMY_EXPERIENCE_REWARD);
+    this.tryOpenUpgradeChoices();
+  }
+
+  private tryOpenUpgradeChoices(): void {
+    if (this.upgradeSelecting || this.gameOver || this.stats.caravanHealth <= 0 || !hasPendingLevelUp(this.experience)) {
+      return;
+    }
+
+    const choices = pickUpgradeChoices(UPGRADE_POOL, 3, Math.random);
+    if (choices.length === 0) {
+      return;
+    }
+
+    this.upgradeChoices = choices;
+    this.upgradeSelecting = true;
+    this.showUpgradeOverlay();
+  }
+
+  private updateUpgradeInput(): void {
+    if (this.upgradeInputCooldown > 0) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
+      this.selectUpgrade(0);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) {
+      this.selectUpgrade(1);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) {
+      this.selectUpgrade(2);
     }
   }
 
@@ -385,6 +471,109 @@ export class GameScene extends Phaser.Scene {
     this.feedbackTimer = FEEDBACK_DURATION;
   }
 
+  private formatNumber(value: number): string {
+    return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  }
+
+  private updateTowerRangeVisuals(): void {
+    for (const tower of this.towers) {
+      tower.rangeShape.setRadius(this.stats.towerRange);
+    }
+  }
+
+  private showUpgradeOverlay(): void {
+    this.hideUpgradeOverlay();
+
+    const overlay = this.add.container(640, 360);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(OVERLAY_DEPTH + 20);
+
+    const backdrop = this.add.rectangle(0, 0, 1280, 720, 0x020617, 0.68);
+    const panel = this.add.rectangle(0, 0, 760, 430, 0x111827, 0.96);
+    panel.setStrokeStyle(2, 0xfacc15, 0.85);
+
+    const title = this.add.text(0, -175, '选择升级', {
+      align: 'center',
+      color: '#fef3c7',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '32px',
+    });
+    title.setOrigin(0.5);
+
+    const subtitle = this.add.text(0, -135, '按 1 / 2 / 3 选择', {
+      align: 'center',
+      color: '#cbd5e1',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '18px',
+    });
+    subtitle.setOrigin(0.5);
+
+    overlay.add([backdrop, panel, title, subtitle]);
+
+    this.upgradeChoices.forEach((choice, index) => {
+      const y = -60 + index * 110;
+      const card = this.add.rectangle(0, y, 640, 86, 0x1f2937, 1);
+      card.setStrokeStyle(1, 0x94a3b8, 0.7);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerdown', () => {
+        if (this.upgradeInputCooldown > 0) {
+          return;
+        }
+
+        this.selectUpgrade(index);
+      });
+
+      const name = this.add.text(-285, y - 22, `${index + 1}. ${choice.name}`, {
+        color: '#f8fafc',
+        fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+        fontSize: '22px',
+      });
+      name.setOrigin(0, 0.5);
+
+      const description = this.add.text(-285, y + 18, choice.description, {
+        color: '#bfdbfe',
+        fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+        fontSize: '18px',
+        wordWrap: { width: 560 },
+      });
+      description.setOrigin(0, 0.5);
+
+      overlay.add([card, name, description]);
+    });
+
+    this.upgradeOverlay = overlay;
+  }
+
+  private hideUpgradeOverlay(): void {
+    if (!this.upgradeOverlay) {
+      return;
+    }
+
+    this.upgradeOverlay.destroy(true);
+    this.upgradeOverlay = undefined;
+  }
+
+  private selectUpgrade(index: number): void {
+    if (!this.upgradeSelecting) {
+      return;
+    }
+
+    const choice = this.upgradeChoices[index];
+    if (!choice) {
+      return;
+    }
+
+    this.stats = applyUpgrade(this.stats, choice.id);
+    this.experience = consumePendingLevelUp(this.experience);
+    this.upgradeSelecting = false;
+    this.upgradeChoices = [];
+    this.hideUpgradeOverlay();
+    this.upgradeInputCooldown = UPGRADE_INPUT_COOLDOWN;
+    this.updateTowerRangeVisuals();
+    this.updateHud();
+    this.tryOpenUpgradeChoices();
+  }
+
   private updateFeedback(deltaSeconds: number): void {
     this.feedbackTimer = Math.max(0, this.feedbackTimer - deltaSeconds);
     if (this.feedbackTimer <= 0) {
@@ -404,8 +593,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hud.setText([
-      `行城生命：${this.caravanHealth}/${CARAVAN_MAX_HEALTH}`,
+      `行城生命：${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`,
       `木材：${Math.floor(this.wood)}`,
+      `等级：${this.experience.level}`,
+      `经验：${Math.floor(this.experience.experience)}/${requiredExperienceForLevel(this.experience.level)}`,
       `时间：${this.elapsedSeconds.toFixed(1)} 秒`,
       `箭塔：${this.towers.length}/${STAGE0_BUILD_SLOTS.length}`,
       `空格：建造箭塔（${TOWER_COST} 木材）`,
