@@ -27,7 +27,7 @@
 - Create: `src/game/experience.ts`
 - Create: `tests/experience.test.ts`
 
-- [ ] **Step 1: Write the failing experience tests**
+- [x] **Step 1: Write the failing experience tests**
 
 Create `tests/experience.test.ts`:
 
@@ -107,7 +107,7 @@ describe('experience progression', () => {
 });
 ```
 
-- [ ] **Step 2: Run the experience tests and confirm RED**
+- [x] **Step 2: Run the experience tests and confirm RED**
 
 Run:
 
@@ -117,7 +117,7 @@ npm test -- tests/experience.test.ts
 
 Expected: FAIL because `src/game/experience.ts` does not exist.
 
-- [ ] **Step 3: Implement the experience module**
+- [x] **Step 3: Implement the experience module**
 
 Create `src/game/experience.ts`:
 
@@ -173,7 +173,7 @@ export function hasPendingLevelUp(state: ExperienceState): boolean {
 }
 ```
 
-- [ ] **Step 4: Run the experience tests and confirm GREEN**
+- [x] **Step 4: Run the experience tests and confirm GREEN**
 
 Run:
 
@@ -183,7 +183,7 @@ npm test -- tests/experience.test.ts
 
 Expected: PASS, 10 tests.
 
-- [ ] **Step 5: Commit experience rules**
+- [x] **Step 5: Commit experience rules**
 
 ```bash
 git add src/game/experience.ts tests/experience.test.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
