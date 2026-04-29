@@ -662,7 +662,7 @@ git commit -m "feat: award experience from enemy kills"
 **Files:**
 - Modify: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Add upgrade selection imports**
+- [x] **Step 1: Add upgrade selection imports**
 
 Update the existing experience import:
 
@@ -691,7 +691,7 @@ import {
 } from '../game/upgrades';
 ```
 
-- [ ] **Step 2: Pause the simulation while choosing an upgrade**
+- [x] **Step 2: Pause the simulation while choosing an upgrade**
 
 In `update()`, after the game-over block and before `this.elapsedSeconds += deltaSeconds`, add:
 
@@ -703,7 +703,7 @@ In `update()`, after the game-over block and before `this.elapsedSeconds += delt
     }
 ```
 
-- [ ] **Step 3: Add upgrade choice opening logic**
+- [x] **Step 3: Add upgrade choice opening logic**
 
 Add this method:
 
@@ -724,7 +724,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 4: Open upgrade choices after XP gain**
+- [x] **Step 4: Open upgrade choices after XP gain**
 
 Update `awardEnemyExperience()`:
 
@@ -739,7 +739,7 @@ Update `awardEnemyExperience()`:
   }
 ```
 
-- [ ] **Step 5: Add number-key selection**
+- [x] **Step 5: Add number-key selection**
 
 Add this method:
 
@@ -761,7 +761,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 6: Add upgrade overlay rendering**
+- [x] **Step 6: Add upgrade overlay rendering**
 
 Add this method:
 
@@ -824,7 +824,7 @@ Add this method:
   }
 ```
 
-- [ ] **Step 7: Add overlay cleanup and selection application**
+- [x] **Step 7: Add overlay cleanup and selection application**
 
 Add these methods:
 
@@ -859,7 +859,7 @@ Add these methods:
   }
 ```
 
-- [ ] **Step 8: Ensure restart cleanup is explicit**
+- [x] **Step 8: Ensure restart cleanup is explicit**
 
 In `resetState()`, call cleanup before clearing upgrade fields:
 
@@ -872,7 +872,7 @@ In `resetState()`, call cleanup before clearing upgrade fields:
 
 If `hideUpgradeOverlay()` is called before `this.upgradeOverlay` exists during the first scene creation, it safely returns.
 
-- [ ] **Step 9: Run full automated verification**
+- [x] **Step 9: Run full automated verification**
 
 Run:
 
@@ -883,7 +883,7 @@ npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 10: Commit upgrade overlay**
+- [x] **Step 10: Commit upgrade overlay**
 
 ```bash
 git add src/scenes/GameScene.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md

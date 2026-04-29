@@ -7,12 +7,21 @@ import { getObjectiveText } from '../game/objective';
 import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
 import {
   addExperience,
+  consumePendingLevelUp,
   createExperienceState,
   ENEMY_EXPERIENCE_REWARD,
+  hasPendingLevelUp,
   requiredExperienceForLevel,
   type ExperienceState,
 } from '../game/experience';
-import { DEFAULT_RUN_STATS, type RunStats, type UpgradeDefinition } from '../game/upgrades';
+import {
+  applyUpgrade,
+  DEFAULT_RUN_STATS,
+  pickUpgradeChoices,
+  UPGRADE_POOL,
+  type RunStats,
+  type UpgradeDefinition,
+} from '../game/upgrades';
 
 const PLAYER_SPEED = 245;
 const CARAVAN_SPEED = 24;
@@ -141,6 +150,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (this.upgradeSelecting) {
+      this.updateUpgradeInput();
+      this.updateHud();
+      return;
+    }
+
     this.elapsedSeconds += deltaSeconds;
     this.updatePlayer(deltaSeconds);
     this.updateCaravan(deltaSeconds);
@@ -163,6 +178,7 @@ export class GameScene extends Phaser.Scene {
     this.caravanPosition = { x: 220, y: 360 };
     this.stats = { ...DEFAULT_RUN_STATS };
     this.experience = createExperienceState();
+    this.hideUpgradeOverlay();
     this.upgradeSelecting = false;
     this.upgradeChoices = [];
     this.upgradeOverlay = undefined;
@@ -384,6 +400,38 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.experience = addExperience(this.experience, ENEMY_EXPERIENCE_REWARD);
+    this.tryOpenUpgradeChoices();
+  }
+
+  private tryOpenUpgradeChoices(): void {
+    if (this.upgradeSelecting || this.gameOver || this.stats.caravanHealth <= 0 || !hasPendingLevelUp(this.experience)) {
+      return;
+    }
+
+    const choices = pickUpgradeChoices(UPGRADE_POOL, 3, Math.random);
+    if (choices.length === 0) {
+      return;
+    }
+
+    this.upgradeChoices = choices;
+    this.upgradeSelecting = true;
+    this.showUpgradeOverlay();
+  }
+
+  private updateUpgradeInput(): void {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
+      this.selectUpgrade(0);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) {
+      this.selectUpgrade(1);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) {
+      this.selectUpgrade(2);
+    }
   }
 
   private drawShot(from: Point, to: Point): void {
@@ -423,6 +471,92 @@ export class GameScene extends Phaser.Scene {
     for (const tower of this.towers) {
       tower.rangeShape.setRadius(this.stats.towerRange);
     }
+  }
+
+  private showUpgradeOverlay(): void {
+    this.hideUpgradeOverlay();
+
+    const overlay = this.add.container(640, 360);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(OVERLAY_DEPTH + 20);
+
+    const backdrop = this.add.rectangle(0, 0, 1280, 720, 0x020617, 0.68);
+    const panel = this.add.rectangle(0, 0, 760, 430, 0x111827, 0.96);
+    panel.setStrokeStyle(2, 0xfacc15, 0.85);
+
+    const title = this.add.text(0, -175, '选择升级', {
+      align: 'center',
+      color: '#fef3c7',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '32px',
+    });
+    title.setOrigin(0.5);
+
+    const subtitle = this.add.text(0, -135, '按 1 / 2 / 3 选择', {
+      align: 'center',
+      color: '#cbd5e1',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '18px',
+    });
+    subtitle.setOrigin(0.5);
+
+    overlay.add([backdrop, panel, title, subtitle]);
+
+    this.upgradeChoices.forEach((choice, index) => {
+      const y = -60 + index * 110;
+      const card = this.add.rectangle(0, y, 640, 86, 0x1f2937, 1);
+      card.setStrokeStyle(1, 0x94a3b8, 0.7);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerdown', () => this.selectUpgrade(index));
+
+      const name = this.add.text(-285, y - 22, `${index + 1}. ${choice.name}`, {
+        color: '#f8fafc',
+        fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+        fontSize: '22px',
+      });
+      name.setOrigin(0, 0.5);
+
+      const description = this.add.text(-285, y + 18, choice.description, {
+        color: '#bfdbfe',
+        fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+        fontSize: '18px',
+        wordWrap: { width: 560 },
+      });
+      description.setOrigin(0, 0.5);
+
+      overlay.add([card, name, description]);
+    });
+
+    this.upgradeOverlay = overlay;
+  }
+
+  private hideUpgradeOverlay(): void {
+    if (!this.upgradeOverlay) {
+      return;
+    }
+
+    this.upgradeOverlay.destroy(true);
+    this.upgradeOverlay = undefined;
+  }
+
+  private selectUpgrade(index: number): void {
+    if (!this.upgradeSelecting) {
+      return;
+    }
+
+    const choice = this.upgradeChoices[index];
+    if (!choice) {
+      return;
+    }
+
+    this.stats = applyUpgrade(this.stats, choice.id);
+    this.experience = consumePendingLevelUp(this.experience);
+    this.upgradeSelecting = false;
+    this.upgradeChoices = [];
+    this.hideUpgradeOverlay();
+    this.updateTowerRangeVisuals();
+    this.updateHud();
+    this.tryOpenUpgradeChoices();
   }
 
   private updateFeedback(deltaSeconds: number): void {
