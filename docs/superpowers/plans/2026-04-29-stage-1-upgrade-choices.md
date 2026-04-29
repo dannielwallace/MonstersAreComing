@@ -198,7 +198,7 @@ git commit -m "feat: add experience progression rules"
 - Create: `src/game/upgrades.ts`
 - Create: `tests/upgrades.test.ts`
 
-- [ ] **Step 1: Write the failing upgrade tests**
+- [x] **Step 1: Write the failing upgrade tests**
 
 Create `tests/upgrades.test.ts`:
 
@@ -281,7 +281,7 @@ describe('applyUpgrade', () => {
 });
 ```
 
-- [ ] **Step 2: Run the upgrade tests and confirm RED**
+- [x] **Step 2: Run the upgrade tests and confirm RED**
 
 Run:
 
@@ -291,7 +291,7 @@ npm test -- tests/upgrades.test.ts
 
 Expected: FAIL because `src/game/upgrades.ts` does not exist.
 
-- [ ] **Step 3: Implement the upgrade module**
+- [x] **Step 3: Implement the upgrade module**
 
 Create `src/game/upgrades.ts`:
 
@@ -426,7 +426,7 @@ export function applyUpgrade(stats: RunStats, upgradeId: UpgradeId): RunStats {
 }
 ```
 
-- [ ] **Step 4: Run the upgrade tests and confirm GREEN**
+- [x] **Step 4: Run the upgrade tests and confirm GREEN**
 
 Run:
 
@@ -436,7 +436,7 @@ npm test -- tests/upgrades.test.ts
 
 Expected: PASS, 11 tests.
 
-- [ ] **Step 5: Commit upgrade rules**
+- [x] **Step 5: Commit upgrade rules**
 
 ```bash
 git add src/game/upgrades.ts tests/upgrades.test.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md
