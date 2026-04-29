@@ -37,6 +37,7 @@ const OVERLAY_DEPTH = 1000;
 const SPAWN_MARGIN = 96;
 const THREAT_RANGE = 260;
 const FEEDBACK_DURATION = 1.4;
+const UPGRADE_INPUT_COOLDOWN = 0.2;
 const FEEDBACK_Y = 236;
 const DAMAGE_FLASH_DURATION = 0.18;
 const CARAVAN_NORMAL_COLOR = 0x4caf50;
@@ -82,6 +83,7 @@ export class GameScene extends Phaser.Scene {
   private stats: RunStats = { ...DEFAULT_RUN_STATS };
   private experience: ExperienceState = createExperienceState();
   private upgradeSelecting = false;
+  private upgradeInputCooldown = 0;
   private upgradeChoices: UpgradeDefinition[] = [];
   private upgradeOverlay?: Phaser.GameObjects.Container;
   private wood = 0;
@@ -151,6 +153,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.upgradeSelecting) {
+      this.upgradeInputCooldown = Math.max(0, this.upgradeInputCooldown - deltaSeconds);
       this.updateUpgradeInput();
       this.updateHud();
       return;
@@ -180,6 +183,7 @@ export class GameScene extends Phaser.Scene {
     this.experience = createExperienceState();
     this.hideUpgradeOverlay();
     this.upgradeSelecting = false;
+    this.upgradeInputCooldown = 0;
     this.upgradeChoices = [];
     this.upgradeOverlay = undefined;
     this.wood = 0;
@@ -419,6 +423,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateUpgradeInput(): void {
+    if (this.upgradeInputCooldown > 0) {
+      return;
+    }
+
     if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) {
       this.selectUpgrade(0);
       return;
@@ -507,7 +515,13 @@ export class GameScene extends Phaser.Scene {
       const card = this.add.rectangle(0, y, 640, 86, 0x1f2937, 1);
       card.setStrokeStyle(1, 0x94a3b8, 0.7);
       card.setInteractive({ useHandCursor: true });
-      card.on('pointerdown', () => this.selectUpgrade(index));
+      card.on('pointerdown', () => {
+        if (this.upgradeInputCooldown > 0) {
+          return;
+        }
+
+        this.selectUpgrade(index);
+      });
 
       const name = this.add.text(-285, y - 22, `${index + 1}. ${choice.name}`, {
         color: '#f8fafc',
@@ -554,6 +568,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeSelecting = false;
     this.upgradeChoices = [];
     this.hideUpgradeOverlay();
+    this.upgradeInputCooldown = UPGRADE_INPUT_COOLDOWN;
     this.updateTowerRangeVisuals();
     this.updateHud();
     this.tryOpenUpgradeChoices();
