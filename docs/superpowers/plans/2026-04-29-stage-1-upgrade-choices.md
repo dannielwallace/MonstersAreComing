@@ -450,7 +450,7 @@ git commit -m "feat: add upgrade rule pool"
 **Files:**
 - Modify: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Update imports and remove upgraded constants**
+- [x] **Step 1: Update imports and remove upgraded constants**
 
 In `src/scenes/GameScene.ts`, add imports:
 
@@ -479,7 +479,7 @@ const TOWER_FIRE_INTERVAL = 0.55;
 const TOWER_DAMAGE = 10;
 ```
 
-- [ ] **Step 2: Add key and upgrade fields**
+- [x] **Step 2: Add key and upgrade fields**
 
 Add this type near the entity interfaces:
 
@@ -503,7 +503,7 @@ Replace `private caravanHealth = CARAVAN_MAX_HEALTH;` with:
   private upgradeOverlay?: Phaser.GameObjects.Container;
 ```
 
-- [ ] **Step 3: Register number keys**
+- [x] **Step 3: Register number keys**
 
 Replace the current `this.keys = this.input.keyboard!.addKeys(...)` block in `create()` with:
 
@@ -521,7 +521,7 @@ Replace the current `this.keys = this.input.keyboard!.addKeys(...)` block in `cr
     }) as Record<GameKey, Phaser.Input.Keyboard.Key>;
 ```
 
-- [ ] **Step 4: Reset runtime stats and upgrade state**
+- [x] **Step 4: Reset runtime stats and upgrade state**
 
 In `resetState()`, replace the caravan health reset with:
 
@@ -533,7 +533,7 @@ In `resetState()`, replace the caravan health reset with:
     this.upgradeOverlay = undefined;
 ```
 
-- [ ] **Step 5: Replace fixed stats in gathering, building, combat, and damage**
+- [x] **Step 5: Replace fixed stats in gathering, building, combat, and damage**
 
 In `updateGathering()`, replace fixed gathering values:
 
@@ -573,7 +573,7 @@ In `updateTowers()`, replace tower targeting, damage, and fire interval:
       tower.fireTimer = this.stats.towerFireInterval;
 ```
 
-- [ ] **Step 6: Award XP on enemy death**
+- [x] **Step 6: Award XP on enemy death**
 
 In `updateTowers()`, after removing a dead enemy, call `awardEnemyExperience()`:
 
@@ -597,7 +597,7 @@ Add this helper method:
   }
 ```
 
-- [ ] **Step 7: Add stat formatting and upgrade visual refresh helpers**
+- [x] **Step 7: Add stat formatting and upgrade visual refresh helpers**
 
 Add these helper methods:
 
@@ -613,7 +613,7 @@ Add these helper methods:
   }
 ```
 
-- [ ] **Step 8: Update HUD and game-over health references**
+- [x] **Step 8: Update HUD and game-over health references**
 
 Replace the caravan health line in `updateHud()` and add level/XP lines:
 
@@ -638,7 +638,7 @@ Replace the game-over check in `update()`:
     }
 ```
 
-- [ ] **Step 9: Run scene type-check through build**
+- [x] **Step 9: Run scene type-check through build**
 
 Run:
 
@@ -648,7 +648,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit runtime stats and XP hooks**
+- [x] **Step 10: Commit runtime stats and XP hooks**
 
 ```bash
 git add src/scenes/GameScene.ts docs/superpowers/plans/2026-04-29-stage-1-upgrade-choices.md

@@ -5,16 +5,19 @@ import { addWood, spendWood } from '../game/inventory';
 import { distanceSquared, moveToward, normalizeInput, type Point } from '../game/math';
 import { getObjectiveText } from '../game/objective';
 import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
+import {
+  addExperience,
+  createExperienceState,
+  ENEMY_EXPERIENCE_REWARD,
+  requiredExperienceForLevel,
+  type ExperienceState,
+} from '../game/experience';
+import { DEFAULT_RUN_STATS, type RunStats, type UpgradeDefinition } from '../game/upgrades';
 
 const PLAYER_SPEED = 245;
 const CARAVAN_SPEED = 24;
-const CARAVAN_MAX_HEALTH = 100;
 const GATHER_RANGE = 34;
-const GATHER_RATE = 8;
 const TOWER_COST = 20;
-const TOWER_RANGE = 190;
-const TOWER_FIRE_INTERVAL = 0.55;
-const TOWER_DAMAGE = 10;
 const ENEMY_HEALTH = 30;
 const ENEMY_SPEED = 72;
 const ENEMY_CONTACT_RANGE = 34;
@@ -54,9 +57,11 @@ interface Tower {
   rangeShape: Phaser.GameObjects.Arc;
 }
 
+type GameKey = 'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R' | 'ONE' | 'TWO' | 'THREE';
+
 export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R', Phaser.Input.Keyboard.Key>;
+  private keys!: Record<GameKey, Phaser.Input.Keyboard.Key>;
   private player!: Phaser.GameObjects.Arc;
   private caravan!: Phaser.GameObjects.Rectangle;
   private hud!: Phaser.GameObjects.Text;
@@ -64,7 +69,11 @@ export class GameScene extends Phaser.Scene {
   private gameOverText?: Phaser.GameObjects.Text;
   private playerPosition: Point = { x: 120, y: 360 };
   private caravanPosition: Point = { x: 220, y: 360 };
-  private caravanHealth = CARAVAN_MAX_HEALTH;
+  private stats: RunStats = { ...DEFAULT_RUN_STATS };
+  private experience: ExperienceState = createExperienceState();
+  private upgradeSelecting = false;
+  private upgradeChoices: UpgradeDefinition[] = [];
+  private upgradeOverlay?: Phaser.GameObjects.Container;
   private wood = 0;
   private elapsedSeconds = 0;
   private spawnTimer = 0;
@@ -105,10 +114,17 @@ export class GameScene extends Phaser.Scene {
     this.feedbackText.setDepth(OVERLAY_DEPTH);
 
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,SPACE,R') as Record<
-      'W' | 'A' | 'S' | 'D' | 'SPACE' | 'R',
-      Phaser.Input.Keyboard.Key
-    >;
+    this.keys = this.input.keyboard!.addKeys({
+      W: Phaser.Input.Keyboard.KeyCodes.W,
+      A: Phaser.Input.Keyboard.KeyCodes.A,
+      S: Phaser.Input.Keyboard.KeyCodes.S,
+      D: Phaser.Input.Keyboard.KeyCodes.D,
+      SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE,
+      R: Phaser.Input.Keyboard.KeyCodes.R,
+      ONE: Phaser.Input.Keyboard.KeyCodes.ONE,
+      TWO: Phaser.Input.Keyboard.KeyCodes.TWO,
+      THREE: Phaser.Input.Keyboard.KeyCodes.THREE,
+    }) as Record<GameKey, Phaser.Input.Keyboard.Key>;
 
     this.createWoodNodes();
     this.updateHud();
@@ -136,7 +152,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFeedback(deltaSeconds);
     this.updateHud();
 
-    if (this.caravanHealth <= 0) {
+    if (this.stats.caravanHealth <= 0) {
       this.showGameOver();
     }
   }
@@ -144,7 +160,11 @@ export class GameScene extends Phaser.Scene {
   private resetState(): void {
     this.playerPosition = { x: 120, y: 360 };
     this.caravanPosition = { x: 220, y: 360 };
-    this.caravanHealth = CARAVAN_MAX_HEALTH;
+    this.stats = { ...DEFAULT_RUN_STATS };
+    this.experience = createExperienceState();
+    this.upgradeSelecting = false;
+    this.upgradeChoices = [];
+    this.upgradeOverlay = undefined;
     this.wood = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 0;
@@ -228,7 +248,7 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const gatherAmount = GATHER_RATE * deltaSeconds;
+      const gatherAmount = this.stats.gatherRate * deltaSeconds;
       const gathered = node.remaining <= gatherAmount ? node.remaining : gatherAmount;
       node.remaining -= gathered;
       this.wood = addWood(this.wood, gathered);
@@ -245,7 +265,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (gatheredThisFrame && this.feedbackTimer <= 0) {
-      this.showFeedback(`采集中 +${GATHER_RATE}/秒`, '#bbf7d0');
+      this.showFeedback(`采集中 +${this.formatNumber(this.stats.gatherRate)}/秒`, '#bbf7d0');
     }
   }
 
@@ -274,7 +294,7 @@ export class GameScene extends Phaser.Scene {
 
     this.wood = spendResult.wood;
     const position = getSlotWorldPosition(this.caravanPosition, slot);
-    const rangeShape = this.add.circle(position.x, position.y, TOWER_RANGE, 0xffffff, 0);
+    const rangeShape = this.add.circle(position.x, position.y, this.stats.towerRange, 0xffffff, 0);
     rangeShape.setStrokeStyle(1, 0x94a3b8, 0.35);
     const shape = this.add.rectangle(position.x, position.y, 24, 24, 0x9ca3af);
     this.towers.push({
@@ -324,7 +344,7 @@ export class GameScene extends Phaser.Scene {
       const isTouchingCaravan =
         distanceSquared(enemy.position, this.caravanPosition) <= ENEMY_CONTACT_RANGE * ENEMY_CONTACT_RANGE;
       if (isTouchingCaravan && enemy.damageTimer <= 0) {
-        this.caravanHealth = Math.max(0, this.caravanHealth - ENEMY_CONTACT_DAMAGE);
+        this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - ENEMY_CONTACT_DAMAGE);
         enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
         this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
         this.showFeedback('行城遭到攻击！', '#fecaca');
@@ -339,21 +359,30 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      const target = selectNearestTarget(tower.position, this.enemies, TOWER_RANGE);
+      const target = selectNearestTarget(tower.position, this.enemies, this.stats.towerRange);
       if (!target) {
         continue;
       }
 
-      const result = applyDamage(target.health, TOWER_DAMAGE);
+      const result = applyDamage(target.health, this.stats.towerDamage);
       target.health = result.health;
       this.drawShot(tower.position, target.position);
-      tower.fireTimer = TOWER_FIRE_INTERVAL;
+      tower.fireTimer = this.stats.towerFireInterval;
 
       if (result.dead) {
         target.shape.destroy();
         this.enemies = this.enemies.filter((enemy) => enemy.id !== target.id);
+        this.awardEnemyExperience();
       }
     }
+  }
+
+  private awardEnemyExperience(): void {
+    if (this.gameOver || this.stats.caravanHealth <= 0) {
+      return;
+    }
+
+    this.experience = addExperience(this.experience, ENEMY_EXPERIENCE_REWARD);
   }
 
   private drawShot(from: Point, to: Point): void {
@@ -385,6 +414,16 @@ export class GameScene extends Phaser.Scene {
     this.feedbackTimer = FEEDBACK_DURATION;
   }
 
+  private formatNumber(value: number): string {
+    return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+  }
+
+  private updateTowerRangeVisuals(): void {
+    for (const tower of this.towers) {
+      tower.rangeShape.setRadius(this.stats.towerRange);
+    }
+  }
+
   private updateFeedback(deltaSeconds: number): void {
     this.feedbackTimer = Math.max(0, this.feedbackTimer - deltaSeconds);
     if (this.feedbackTimer <= 0) {
@@ -404,8 +443,10 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.hud.setText([
-      `行城生命：${this.caravanHealth}/${CARAVAN_MAX_HEALTH}`,
+      `行城生命：${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`,
       `木材：${Math.floor(this.wood)}`,
+      `等级：${this.experience.level}`,
+      `经验：${Math.floor(this.experience.experience)}/${requiredExperienceForLevel(this.experience.level)}`,
       `时间：${this.elapsedSeconds.toFixed(1)} 秒`,
       `箭塔：${this.towers.length}/${STAGE0_BUILD_SLOTS.length}`,
       `空格：建造箭塔（${TOWER_COST} 木材）`,
