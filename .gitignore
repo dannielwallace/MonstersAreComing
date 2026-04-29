@@ -1,5 +1,7 @@
 .worktrees
 .worktrees/
+.superpowers/
 node_modules/
 dist/
 *.log
+*.pre-merge-local.md
