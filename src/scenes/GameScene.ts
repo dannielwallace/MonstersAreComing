@@ -96,7 +96,7 @@ export class GameScene extends Phaser.Scene {
     });
     this.hud.setScrollFactor(0);
     this.hud.setDepth(OVERLAY_DEPTH);
-    this.feedbackText = this.add.text(18, 154, '', {
+    this.feedbackText = this.add.text(18, 190, '', {
       color: '#facc15',
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
       fontSize: '18px',
@@ -244,7 +244,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (gatheredThisFrame) {
+    if (gatheredThisFrame && this.feedbackTimer <= 0) {
       this.showFeedback(`采集中 +${GATHER_RATE}/秒`, '#bbf7d0');
     }
   }
