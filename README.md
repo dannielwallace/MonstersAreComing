@@ -20,6 +20,8 @@ Stage 0 Phaser greybox prototype for a moving-base survival defense loop.
 - `Space` - build an arrow tower when you have 20 wood
 - `R` - restart after game over
 
+The in-game HUD and feedback prompts are shown in Simplified Chinese for the Stage 0 clarity pass.
+
 ## Stage 0 Goal
 
 Gather wood away from the moving caravan, build towers around it, and survive as long as possible while enemies attack the caravan.

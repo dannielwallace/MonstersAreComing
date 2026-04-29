@@ -26,7 +26,7 @@
 - Create: `src/game/objective.ts`
 - Create: `tests/objective.test.ts`
 
-- [ ] **Step 1: Write the failing objective tests**
+- [x] **Step 1: Write the failing objective tests**
 
 Create `tests/objective.test.ts`:
 
@@ -81,7 +81,7 @@ describe('getObjectiveText', () => {
 });
 ```
 
-- [ ] **Step 2: Run the objective tests and confirm RED**
+- [x] **Step 2: Run the objective tests and confirm RED**
 
 Run:
 
@@ -91,7 +91,7 @@ npm test -- tests/objective.test.ts
 
 Expected: FAIL because `src/game/objective.ts` does not exist.
 
-- [ ] **Step 3: Implement the objective module**
+- [x] **Step 3: Implement the objective module**
 
 Create `src/game/objective.ts`:
 
@@ -120,7 +120,7 @@ export function getObjectiveText(state: ObjectiveState): string {
 }
 ```
 
-- [ ] **Step 4: Run the objective tests and confirm GREEN**
+- [x] **Step 4: Run the objective tests and confirm GREEN**
 
 Run:
 
@@ -130,7 +130,7 @@ npm test -- tests/objective.test.ts
 
 Expected: PASS, 4 tests.
 
-- [ ] **Step 5: Commit objective module**
+- [x] **Step 5: Commit objective module**
 
 ```bash
 git add src/game/objective.ts tests/objective.test.ts
@@ -144,7 +144,7 @@ git commit -m "feat: add objective guidance rule"
 **Files:**
 - Modify: `src/scenes/GameScene.ts`
 
-- [ ] **Step 1: Inspect the current scene before editing**
+- [x] **Step 1: Inspect the current scene before editing**
 
 Run:
 
@@ -154,7 +154,7 @@ Select-String -Path src/scenes/GameScene.ts -Pattern "Caravan HP|Wood:|Time:|Tow
 
 Expected: Finds the existing English HUD and game-over strings.
 
-- [ ] **Step 2: Update imports, constants, fields, and text objects**
+- [x] **Step 2: Update imports, constants, fields, and text objects**
 
 Modify the top of `src/scenes/GameScene.ts` so it imports `getObjectiveText` and defines feedback constants:
 
@@ -207,7 +207,7 @@ Reset feedback timers in `resetState()`:
     this.caravanDamageFlashTimer = 0;
 ```
 
-- [ ] **Step 3: Add helper methods for objective and feedback**
+- [x] **Step 3: Add helper methods for objective and feedback**
 
 Add these methods inside `GameScene`:
 
@@ -241,7 +241,7 @@ Add these methods inside `GameScene`:
   }
 ```
 
-- [ ] **Step 4: Wire feedback into the update loop**
+- [x] **Step 4: Wire feedback into the update loop**
 
 In `update()`, call feedback update before `updateHud()`:
 
@@ -289,7 +289,7 @@ In `updateEnemies()`, when the caravan takes damage, add:
         this.showFeedback('行城遭到攻击！', '#fecaca');
 ```
 
-- [ ] **Step 5: Convert HUD and game-over text to Chinese**
+- [x] **Step 5: Convert HUD and game-over text to Chinese**
 
 Replace `updateHud()` with:
 
@@ -325,7 +325,7 @@ and change its font family to:
 fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
 ```
 
-- [ ] **Step 6: Run tests and build**
+- [x] **Step 6: Run tests and build**
 
 Run:
 
@@ -336,7 +336,7 @@ npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 7: Commit scene polish**
+- [x] **Step 7: Commit scene polish**
 
 ```bash
 git add src/scenes/GameScene.ts
@@ -351,7 +351,7 @@ git commit -m "feat: add chinese hud feedback"
 - Modify: `README.md`
 - Modify: `docs/superpowers/plans/2026-04-29-stage-0-clarity-polish.md`
 
-- [ ] **Step 1: Update README**
+- [x] **Step 1: Update README**
 
 Modify `README.md` so the controls section stays readable and notes Chinese HUD feedback:
 
@@ -365,7 +365,7 @@ Modify `README.md` so the controls section stays readable and notes Chinese HUD 
 The in-game HUD and feedback prompts are shown in Simplified Chinese for the Stage 0 clarity pass.
 ```
 
-- [ ] **Step 2: Run final verification**
+- [x] **Step 2: Run final verification**
 
 Run:
 
@@ -376,7 +376,7 @@ npm run build
 
 Expected: both PASS.
 
-- [ ] **Step 3: Start dev server and perform smoke check**
+- [x] **Step 3: Start dev server and perform smoke check**
 
 Run:
 
@@ -385,6 +385,8 @@ npm run dev
 ```
 
 Expected: Vite prints a local URL. Open it or smoke check it with a browser/HTTP request.
+
+Result: HTTP smoke only, not an interactive manual playtest. Started Vite on `http://127.0.0.1:4175/`, confirmed the page returned HTTP 200 with the app root, then stopped the dev server.
 
 Manual checklist:
 
@@ -397,7 +399,7 @@ Manual checklist:
 - Caravan hit shows `行城遭到攻击！` and a brief red flash.
 - Game over text is Chinese.
 
-- [ ] **Step 4: Commit docs and completed plan**
+- [x] **Step 4: Commit docs and completed plan**
 
 After marking completed checklist items in this plan:
 
