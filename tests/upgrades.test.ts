@@ -73,4 +73,30 @@ describe('applyUpgrade', () => {
       caravanHealth: 100,
     });
   });
+
+  it('increases wall max health for 加固城墙', () => {
+    expect(applyUpgrade(baseStats, 'wall-health').wallMaxHealth).toBe(90);
+  });
+
+  it('signals wall repair for 紧急抢修', () => {
+    expect(applyUpgrade(baseStats, 'wall-repair').pendingWallRepair).toBe(40);
+  });
+
+  it('stacks wall repair signals', () => {
+    const once = applyUpgrade(baseStats, 'wall-repair');
+    const twice = applyUpgrade(once, 'wall-repair');
+    expect(twice.pendingWallRepair).toBe(80);
+  });
+
+  it('increases catapult damage for 重型弹丸', () => {
+    expect(applyUpgrade(baseStats, 'catapult-damage').catapultDamage).toBe(35);
+  });
+
+  it('reduces catapult fire interval for 快速抛射', () => {
+    expect(applyUpgrade(baseStats, 'catapult-reload').catapultFireInterval).toBeCloseTo(1.53);
+  });
+
+  it('does not reduce catapult fire interval below 0.5 seconds', () => {
+    expect(applyUpgrade({ ...baseStats, catapultFireInterval: 0.55 }, 'catapult-reload').catapultFireInterval).toBe(0.5);
+  });
 });

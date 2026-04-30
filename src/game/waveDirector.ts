@@ -49,12 +49,26 @@ export function selectEnemyTypesForBudget(
   const spawnedEnemies: EnemyTypeId[] = [];
   let remainingBudget = Math.floor(budget);
 
-  const highestUnlockedEnemy = unlockedEnemyTypes[unlockedEnemyTypes.length - 1];
-  const highestCost = ENEMY_DEFINITIONS[highestUnlockedEnemy].budgetCost;
+  // Boss waves: force-add exactly 1 boss on waves 8, 12, 16, ...
+  const isBossWave = waveNumber >= 8 && waveNumber % 4 === 0;
+  if (isBossWave && unlockedEnemyTypes.includes('boss')) {
+    const bossCost = ENEMY_DEFINITIONS['boss'].budgetCost;
+    if (bossCost <= remainingBudget) {
+      spawnedEnemies.push('boss');
+      remainingBudget -= bossCost;
+    }
+  }
 
-  if (highestCost <= remainingBudget) {
-    spawnedEnemies.push(highestUnlockedEnemy);
-    remainingBudget -= highestCost;
+  // Place one of the highest-unlocked-cost enemy (skip boss, already handled)
+  const nonBossUnlocked = unlockedEnemyTypes.filter((t) => t !== 'boss');
+  if (nonBossUnlocked.length > 0) {
+    const highestUnlockedEnemy = nonBossUnlocked[nonBossUnlocked.length - 1];
+    const highestCost = ENEMY_DEFINITIONS[highestUnlockedEnemy].budgetCost;
+
+    if (highestCost <= remainingBudget) {
+      spawnedEnemies.push(highestUnlockedEnemy);
+      remainingBudget -= highestCost;
+    }
   }
 
   const fillPattern = unlockedEnemyTypes.filter(

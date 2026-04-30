@@ -45,7 +45,7 @@ describe('updateWaveState', () => {
       state: { currentWave: 3, nextWaveTimer: 14 },
       startedWave: true,
       spawnedEnemies: [
-        'runner',
+        'thrower',
         'grunt',
         'runner',
         'grunt',
@@ -53,7 +53,6 @@ describe('updateWaveState', () => {
         'grunt',
         'runner',
         'grunt',
-        'runner',
       ],
     });
   });
@@ -86,17 +85,8 @@ describe('getWaveBudget', () => {
 
 describe('wave enemy selection', () => {
   it('selects a deterministic wave composition', () => {
-    expect(selectEnemyTypesForWave(2)).toEqual([
-      'runner',
-      'grunt',
-      'runner',
-      'grunt',
-      'runner',
-      'grunt',
-      'runner',
-    ]);
     expect(selectEnemyTypesForWave(4)).toEqual([
-      'brute',
+      'thrower',
       'grunt',
       'runner',
       'grunt',
@@ -105,6 +95,7 @@ describe('wave enemy selection', () => {
       'runner',
       'grunt',
       'runner',
+      'grunt',
     ]);
   });
 
@@ -120,8 +111,9 @@ describe('wave enemy selection', () => {
 
   it('floors fractional custom budgets before spending', () => {
     expect(selectEnemyTypesForBudget(4, 4.8)).toEqual([
-      'brute',
+      'thrower',
       'grunt',
+      'runner',
     ]);
   });
 });

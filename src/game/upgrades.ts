@@ -4,7 +4,11 @@ export type UpgradeId =
   | 'tower-reload'
   | 'gather-rate'
   | 'caravan-max-health'
-  | 'caravan-repair';
+  | 'caravan-repair'
+  | 'wall-health'
+  | 'wall-repair'
+  | 'catapult-damage'
+  | 'catapult-reload';
 
 export interface RunStats {
   towerRange: number;
@@ -13,6 +17,12 @@ export interface RunStats {
   gatherRate: number;
   caravanMaxHealth: number;
   caravanHealth: number;
+  wallMaxHealth: number;
+  pendingWallRepair: number;
+  catapultDamage: number;
+  catapultFireInterval: number;
+  catapultRange: number;
+  catapultSplashRadius: number;
 }
 
 export interface UpgradeDefinition {
@@ -24,6 +34,7 @@ export interface UpgradeDefinition {
 export type RandomFn = () => number;
 
 export const MIN_TOWER_FIRE_INTERVAL = 0.25;
+export const MIN_CATAPULT_FIRE_INTERVAL = 0.5;
 
 export const DEFAULT_RUN_STATS: RunStats = {
   towerRange: 190,
@@ -32,6 +43,12 @@ export const DEFAULT_RUN_STATS: RunStats = {
   gatherRate: 8,
   caravanMaxHealth: 100,
   caravanHealth: 100,
+  wallMaxHealth: 60,
+  pendingWallRepair: 0,
+  catapultDamage: 25,
+  catapultFireInterval: 1.8,
+  catapultRange: 180,
+  catapultSplashRadius: 60,
 };
 
 export const UPGRADE_POOL: UpgradeDefinition[] = [
@@ -64,6 +81,26 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
     id: 'caravan-repair',
     name: '前线修补',
     description: '立即回复行城 25 点生命',
+  },
+  {
+    id: 'wall-health',
+    name: '加固城墙',
+    description: '城墙最大生命 +30',
+  },
+  {
+    id: 'wall-repair',
+    name: '紧急抢修',
+    description: '立即修复所有城墙 40 点生命',
+  },
+  {
+    id: 'catapult-damage',
+    name: '重型弹丸',
+    description: '投石车伤害 +10',
+  },
+  {
+    id: 'catapult-reload',
+    name: '快速抛射',
+    description: '投石车攻击间隔 -15%',
   },
 ];
 
@@ -119,6 +156,26 @@ export function applyUpgrade(stats: RunStats, upgradeId: UpgradeId): RunStats {
       return {
         ...stats,
         caravanHealth: Math.min(stats.caravanMaxHealth, stats.caravanHealth + 25),
+      };
+    case 'wall-health':
+      return {
+        ...stats,
+        wallMaxHealth: stats.wallMaxHealth + 30,
+      };
+    case 'wall-repair':
+      return {
+        ...stats,
+        pendingWallRepair: stats.pendingWallRepair + 40,
+      };
+    case 'catapult-damage':
+      return {
+        ...stats,
+        catapultDamage: stats.catapultDamage + 10,
+      };
+    case 'catapult-reload':
+      return {
+        ...stats,
+        catapultFireInterval: Math.max(MIN_CATAPULT_FIRE_INTERVAL, stats.catapultFireInterval * 0.85),
       };
     default: {
       const exhaustive: never = upgradeId;

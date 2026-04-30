@@ -62,14 +62,37 @@ describe('getEnemyDefinition', () => {
     expect(getEnemyDefinition('toString')).toBeUndefined();
     expect(getEnemyDefinition('__proto__')).toBeUndefined();
   });
+
+  it('returns the thrower definition', () => {
+    const def = getEnemyDefinition('thrower');
+    expect(def?.name).toBe('投石怪');
+    expect(def?.unlockWave).toBe(3);
+    expect(def?.rangedAttackDamage).toBe(5);
+  });
+
+  it('returns the burst definition', () => {
+    const def = getEnemyDefinition('burst');
+    expect(def?.name).toBe('爆裂虫');
+    expect(def?.unlockWave).toBe(5);
+    expect(def?.contactDamage).toBe(25);
+  });
+
+  it('returns the boss definition', () => {
+    const def = getEnemyDefinition('boss');
+    expect(def?.name).toBe('首领');
+    expect(def?.unlockWave).toBe(8);
+    expect(def?.minionSpawnInterval).toBe(5);
+  });
 });
 
 describe('getUnlockedEnemyTypes', () => {
   it('unlocks enemies by wave number', () => {
     expect(getUnlockedEnemyTypes(1)).toEqual(['grunt']);
     expect(getUnlockedEnemyTypes(2)).toEqual(['grunt', 'runner']);
-    expect(getUnlockedEnemyTypes(3)).toEqual(['grunt', 'runner']);
-    expect(getUnlockedEnemyTypes(4)).toEqual(['grunt', 'runner', 'brute']);
+    expect(getUnlockedEnemyTypes(3)).toEqual(['grunt', 'runner', 'thrower']);
+    expect(getUnlockedEnemyTypes(4)).toEqual(['grunt', 'runner', 'brute', 'thrower']);
+    expect(getUnlockedEnemyTypes(5)).toEqual(['grunt', 'runner', 'brute', 'thrower', 'burst']);
+    expect(getUnlockedEnemyTypes(8)).toEqual(['grunt', 'runner', 'brute', 'thrower', 'burst', 'boss']);
   });
 
   it('normalizes invalid and low wave numbers to first wave unlocks', () => {
@@ -82,6 +105,6 @@ describe('getUnlockedEnemyTypes', () => {
 
 describe('ENEMY_DEFINITIONS', () => {
   it('keeps enemy definitions in type order', () => {
-    expect(Object.keys(ENEMY_DEFINITIONS)).toEqual(['grunt', 'runner', 'brute']);
+    expect(Object.keys(ENEMY_DEFINITIONS)).toEqual(['grunt', 'runner', 'brute', 'thrower', 'burst', 'boss']);
   });
 });

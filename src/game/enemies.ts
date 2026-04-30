@@ -1,4 +1,4 @@
-export type EnemyTypeId = 'grunt' | 'runner' | 'brute';
+export type EnemyTypeId = 'grunt' | 'runner' | 'brute' | 'thrower' | 'burst' | 'boss';
 
 export interface EnemyDefinition {
   type: EnemyTypeId;
@@ -12,9 +12,15 @@ export interface EnemyDefinition {
   experienceReward: number;
   budgetCost: number;
   unlockWave: number;
+  rangedAttackDamage?: number;
+  rangedAttackCooldown?: number;
+  preferredDistance?: number;
+  minionSpawnInterval?: number;
+  minionType?: EnemyTypeId;
+  minionCount?: number;
 }
 
-export const ENEMY_TYPE_ORDER: EnemyTypeId[] = ['grunt', 'runner', 'brute'];
+export const ENEMY_TYPE_ORDER: EnemyTypeId[] = ['grunt', 'runner', 'brute', 'thrower', 'burst', 'boss'];
 
 export const ENEMY_DEFINITIONS: Record<EnemyTypeId, EnemyDefinition> = {
   grunt: {
@@ -55,6 +61,51 @@ export const ENEMY_DEFINITIONS: Record<EnemyTypeId, EnemyDefinition> = {
     experienceReward: 10,
     budgetCost: 3,
     unlockWave: 4,
+  },
+  thrower: {
+    type: 'thrower',
+    name: '投石怪',
+    label: '投',
+    color: 0xff6b35,
+    radius: 12,
+    health: 25,
+    speed: 55,
+    contactDamage: 5,
+    experienceReward: 6,
+    budgetCost: 2,
+    unlockWave: 3,
+    rangedAttackDamage: 5,
+    rangedAttackCooldown: 1.5,
+    preferredDistance: 200,
+  },
+  burst: {
+    type: 'burst',
+    name: '爆裂虫',
+    label: '爆',
+    color: 0xffd600,
+    radius: 8,
+    health: 10,
+    speed: 130,
+    contactDamage: 25,
+    experienceReward: 3,
+    budgetCost: 1,
+    unlockWave: 5,
+  },
+  boss: {
+    type: 'boss',
+    name: '首领',
+    label: '首',
+    color: 0x9c27b0,
+    radius: 35,
+    health: 400,
+    speed: 28,
+    contactDamage: 15,
+    experienceReward: 50,
+    budgetCost: 15,
+    unlockWave: 8,
+    minionSpawnInterval: 5,
+    minionType: 'grunt',
+    minionCount: 2,
   },
 };
 

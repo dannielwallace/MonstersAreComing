@@ -42,3 +42,27 @@ export function applyDamage(currentHealth: number, damage: number): DamageResult
     dead: health === 0,
   };
 }
+
+export function selectHighestHealthTarget<T extends Targetable>(
+  origin: Point,
+  enemies: T[],
+  range: number,
+): T | undefined {
+  const rangeSquared = range * range;
+  let best: T | undefined;
+  let bestHealth = -1;
+
+  for (const enemy of enemies) {
+    if (enemy.health <= 0) {
+      continue;
+    }
+
+    const dist = distanceSquared(origin, enemy.position);
+    if (dist <= rangeSquared && enemy.health > bestHealth) {
+      best = enemy;
+      bestHealth = enemy.health;
+    }
+  }
+
+  return best;
+}
