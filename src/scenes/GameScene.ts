@@ -97,6 +97,7 @@ import {
   UPGRADE_POOL,
   type RunStats,
   type UpgradeDefinition,
+  type UpgradeId,
 } from '../game/upgrades';
 import {
   damageWall,
@@ -222,7 +223,6 @@ export class GameScene extends Phaser.Scene {
   private caravanHealthBar!: Phaser.GameObjects.Rectangle;
   private caravanHealthBarBg!: Phaser.GameObjects.Rectangle;
   private caravanHealthText!: Phaser.GameObjects.Text;
-  private hud!: Phaser.GameObjects.Text;
   private feedbackText!: Phaser.GameObjects.Text;
   private gameOverText?: Phaser.GameObjects.Text;
   private playerPosition: Point = { x: 290, y: 360 };
@@ -270,6 +270,27 @@ export class GameScene extends Phaser.Scene {
   private selectedBuildSlot?: BuildSlot;
   private buildSlotHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
 
+  // Card hand
+  private cardHand: Exclude<BuildingType, 'wall'>[] = [];
+  private cardVisuals: Phaser.GameObjects.Container[] = [];
+  private selectedCardIndex = -1;
+  private cardHandContainer?: Phaser.GameObjects.Container;
+
+  // HUD panels
+  private healthPanel?: Phaser.GameObjects.Container;
+  private healthBar?: Phaser.GameObjects.Rectangle;
+  private healthBarBg?: Phaser.GameObjects.Rectangle;
+  private healthText?: Phaser.GameObjects.Text;
+  private healthLabel?: Phaser.GameObjects.Text;
+  private wavePanel?: Phaser.GameObjects.Container;
+  private waveText?: Phaser.GameObjects.Text;
+  private xpBarBg?: Phaser.GameObjects.Rectangle;
+  private xpBarFill?: Phaser.GameObjects.Rectangle;
+  private xpText?: Phaser.GameObjects.Text;
+  private resourcePanel?: Phaser.GameObjects.Container;
+  private walletText?: Phaser.GameObjects.Text;
+  private carriedText?: Phaser.GameObjects.Text;
+
   // P1 systems
   private shop?: ShopState;
   private shopOverlay?: Phaser.GameObjects.Container;
@@ -299,14 +320,7 @@ export class GameScene extends Phaser.Scene {
     this.caravanBody = this.createCaravan(getCaravanCenter(this.caravanTopLeft));
     this.createCaravanHealthBar(getCaravanCenter(this.caravanTopLeft));
 
-    this.hud = this.add.text(18, 18, '', {
-      color: '#e0d8c8',
-      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
-      fontSize: '14px',
-      lineSpacing: 3,
-    });
-    this.hud.setScrollFactor(0);
-    this.hud.setDepth(OVERLAY_DEPTH);
+    this.createHudPanels();
     this.feedbackText = this.add.text(18, FEEDBACK_Y, '', {
       color: '#d4a843',
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
@@ -333,11 +347,12 @@ export class GameScene extends Phaser.Scene {
 
     this.createInitialWoodNodes();
     this.createInitialStoneNodes();
-    this.createStartingTower();
-    this.updateHud();
+    this.addCardToHand('arrow');
+    this.updateHudPanels();
+    this.createCardHand();
 
     // Hint text
-    const hint = this.add.text(640, 690, 'WASD: 移动 | SPACE: 攻击 | B: 建造 | P: 暂停', {
+    const hint = this.add.text(640, 690, 'WASD: 移动 | SPACE: 攻击 | 点击建筑卡片建造 | P: 暂停', {
       color: '#8a7a68',
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
       fontSize: '12px',
@@ -368,7 +383,7 @@ export class GameScene extends Phaser.Scene {
     if (this.upgradeSelecting) {
       this.upgradeInputCooldown = Math.max(0, this.upgradeInputCooldown - deltaSeconds);
       this.updateUpgradeInput();
-      this.updateHud();
+      this.updateHudPanels();
       return;
     }
 
@@ -395,7 +410,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFeedback(deltaSeconds);
     this.updateWaveBanner(deltaSeconds);
     this.applyPendingWallRepair();
-    this.updateHud();
+    this.updateHudPanels();
 
     if (this.victoryAchieved) return;
 
@@ -1341,13 +1356,6 @@ export class GameScene extends Phaser.Scene {
   // TOWERS
   // ═══════════════════════════════════════════════════
 
-  private createStartingTower(): void {
-    const openSlots = GRID_BUILD_SLOTS.filter((s) => s.buildingType !== 'wall');
-    if (openSlots.length === 0) return;
-    const slot = openSlots[0];
-    const center = this.getSlotCenter(slot);
-    this.buildTower(slot, center, 'arrow');
-  }
 
   private buildArrowTower(slot: BuildSlot, center: Point): void {
     const rangeShape = this.add.circle(center.x, center.y, this.stats.towerRange, 0x000000, 0);
@@ -1671,7 +1679,7 @@ export class GameScene extends Phaser.Scene {
     this.wallet = result.wallet;
     this.applyShopItem(result.item);
     this.showShopOverlay();
-    this.updateHud();
+    this.updateHudPanels();
   }
 
   private rerollCurrentShop(): void {
@@ -2013,13 +2021,23 @@ export class GameScene extends Phaser.Scene {
     const choice = this.upgradeChoices[index];
     if (!choice) return;
     this.stats = applyUpgrade(this.stats, choice.id);
+
+    // Building card upgrades: add card to hand
+    const cardMap: Partial<Record<UpgradeId, Exclude<BuildingType, 'wall'>>> = {
+      'building-card-arrow': 'arrow',
+      'building-card-fire': 'fire',
+      'building-card-ice': 'ice',
+      'building-card-catapult': 'catapult',
+    };
+    const cardType = cardMap[choice.id as UpgradeId];
+    if (cardType) this.addCardToHand(cardType);
     this.experience = consumePendingLevelUp(this.experience);
     this.upgradeSelecting = false;
     this.upgradeChoices = [];
     this.hideUpgradeOverlay();
     this.upgradeInputCooldown = UPGRADE_INPUT_COOLDOWN;
     this.updateTowerRangeVisuals();
-    this.updateHud();
+    this.updateHudPanels();
     this.tryOpenUpgradeChoices();
   }
 
@@ -2169,14 +2187,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleBuildModeToggle(): void {
-    if (!Phaser.Input.Keyboard.JustDown(this.keys.B)) return;
-    if (this.buildMode) {
+    // ESC or B: deselect card, close menus
+    if (this.selectedCardIndex >= 0) {
+      this.deselectCard();
+      return;
+    }
+    // B key: close build menu overlay if open
+    if (this.buildMode && Phaser.Input.Keyboard.JustDown(this.keys.B)) {
       this.buildMode = false;
       this.destroyBuildSlotHighlights();
       this.hideBuildMenu();
-    } else {
-      this.buildMode = true;
-      this.createBuildSlotHighlights();
     }
   }
 
@@ -2190,7 +2210,13 @@ export class GameScene extends Phaser.Scene {
       highlight.setInteractive({ useHandCursor: true });
       highlight.on('pointerover', () => highlight.setFillStyle(0xffa726, 0.18));
       highlight.on('pointerout', () => highlight.setFillStyle(0xffa726, 0.08));
-      highlight.on('pointerdown', () => this.showBuildMenu(slot));
+      highlight.on('pointerdown', () => {
+        if (this.selectedCardIndex >= 0) {
+          this.placeCard(slot);
+        } else {
+          this.showBuildMenu(slot);
+        }
+      });
       this.buildSlotHighlights.set(slot.id, highlight);
     }
   }
@@ -2275,7 +2301,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.hideBuildMenu();
     this.removeBuildSlotHighlight(slot.id);
-    this.updateHud();
+    this.updateHudPanels();
   }
 
   // ═══════════════════════════════════════════════════
@@ -2341,27 +2367,211 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private updateHud(): void {
-    const objective = getObjectiveText({
-      wood: this.wallet.wood, towerCost: BUILDING_DEFINITIONS.arrow.cost.wood ?? 0,
-      hasOpenTowerSlot: this.hasOpenTowerSlot(),
-      caravanThreatened: this.isCaravanThreatened(),
+  // ═══════════════════════════════════════════════════
+  // HUD PANELS
+  // ═══════════════════════════════════════════════════
+
+  private createHudPanels(): void {
+    // Health panel (top-left)
+    this.healthPanel = this.add.container(16, 16);
+    this.healthPanel.setScrollFactor(0);
+    this.healthPanel.setDepth(OVERLAY_DEPTH + 5);
+    this.healthPanel.add(this.add.rectangle(100, 30, 200, 60, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.healthLabel = this.add.text(16, 6, '行城', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '13px', fontStyle: 'bold',
     });
+    this.healthPanel.add(this.healthLabel);
+    this.healthBarBg = this.add.rectangle(100, 28, 176, 10, 0x1a1510);
+    this.healthPanel.add(this.healthBarBg);
+    this.healthBar = this.add.rectangle(12, 28, 172, 6, 0x4caf50);
+    this.healthBar.setOrigin(0, 0.5);
+    this.healthPanel.add(this.healthBar);
+    this.healthText = this.add.text(100, 46, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
+    });
+    this.healthText.setOrigin(0.5);
+    this.healthPanel.add(this.healthText);
 
-    const wallSlotCount = GRID_BUILD_SLOTS.filter((s) => s.buildingType === 'wall').length;
-    const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
-    const hpColor = hpRatio > 0.5 ? '#4caf50' : hpRatio > 0.25 ? '#fdd835' : '#ef4444';
+    // Wave & Level panel (top-center)
+    this.wavePanel = this.add.container(640, 16);
+    this.wavePanel.setScrollFactor(0);
+    this.wavePanel.setDepth(OVERLAY_DEPTH + 5);
+    this.wavePanel.add(this.add.rectangle(0, 22, 260, 56, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.waveText = this.add.text(0, 2, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '14px',
+    });
+    this.waveText.setOrigin(0.5);
+    this.wavePanel.add(this.waveText);
+    this.xpBarBg = this.add.rectangle(0, 38, 230, 8, 0x1a1510);
+    this.wavePanel.add(this.xpBarBg);
+    this.xpBarFill = this.add.rectangle(-113, 38, 226, 6, 0x9c27b0);
+    this.xpBarFill.setOrigin(0, 0.5);
+    this.wavePanel.add(this.xpBarFill);
+    this.xpText = this.add.text(0, 50, '', {
+      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+    });
+    this.xpText.setOrigin(0.5);
+    this.wavePanel.add(this.xpText);
 
-    this.hud.setText([
-      `${hpColor ? `行城生命：` : ''}${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`,
-      `木材：${Math.floor(this.wallet.wood)}  石料：${Math.floor(this.wallet.stone)}  金币：${Math.floor(this.wallet.gold)}`,
-      `携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`,
-      `等级：${this.experience.level}  经验：${Math.floor(this.experience.experience)}/${requiredExperienceForLevel(this.experience.level)}`,
-      `波次：${this.waveState.currentWave}/${MAX_WAVE}  下一波：${Math.ceil(this.waveState.nextWaveTimer)}s`,
-      `箭塔：${this.towers.length}  城墙：${this.walls.length}/${wallSlotCount}`,
-      objective,
-      this.buildMode ? '建造模式 ON' : '按 B 建造',
-    ]);
+    // Resource panel (top-right)
+    this.resourcePanel = this.add.container(1264, 16);
+    this.resourcePanel.setScrollFactor(0);
+    this.resourcePanel.setDepth(OVERLAY_DEPTH + 5);
+    this.resourcePanel.add(this.add.rectangle(0, 18, 180, 44, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.walletText = this.add.text(0, 8, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
+    });
+    this.walletText.setOrigin(0.5);
+    this.resourcePanel.add(this.walletText);
+    this.carriedText = this.add.text(0, 26, '', {
+      color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+    });
+    this.carriedText.setOrigin(0.5);
+    this.resourcePanel.add(this.carriedText);
+  }
+
+  private updateHudPanels(): void {
+    // Health panel
+    if (this.healthBar && this.healthText) {
+      const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
+      const hpColor = hpRatio > 0.5 ? 0x4caf50 : hpRatio > 0.25 ? 0xfdd835 : 0xef4444;
+      this.healthBar.setFillStyle(hpColor);
+      this.healthBar.setSize(Math.max(0, 172 * hpRatio), 6);
+      this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
+    }
+
+    // Wave & Level panel
+    if (this.waveText && this.xpBarFill && this.xpText) {
+      const wallSlotCount = GRID_BUILD_SLOTS.filter((s) => s.buildingType === 'wall').length;
+      this.waveText.setText(`波次 ${this.waveState.currentWave}/${MAX_WAVE}  |  ${Math.ceil(this.waveState.nextWaveTimer)}s  |  箭塔:${this.towers.length}  城墙:${this.walls.length}/${wallSlotCount}`);
+      const req = requiredExperienceForLevel(this.experience.level);
+      const xpRatio = req > 0 ? this.experience.experience / req : 0;
+      this.xpBarFill.setSize(Math.max(0, 226 * Math.min(1, xpRatio)), 6);
+      this.xpText.setText(`Lv.${this.experience.level}`);
+    }
+
+    // Resource panel
+    if (this.walletText && this.carriedText) {
+      this.walletText.setText(`木 ${Math.floor(this.wallet.wood)}  石 ${Math.floor(this.wallet.stone)}  金 ${Math.floor(this.wallet.gold)}`);
+      this.carriedText.setText(`携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`);
+    }
+  }
+
+  private destroyHudPanels(): void {
+    this.healthPanel?.destroy(true);
+    this.wavePanel?.destroy(true);
+    this.resourcePanel?.destroy(true);
+    this.cardHandContainer?.destroy(true);
+  }
+
+  // ═══════════════════════════════════════════════════
+  // CARD HAND
+  // ═══════════════════════════════════════════════════
+
+  private createCardHand(): void {
+    this.cardHandContainer = this.add.container(640, 670);
+    this.cardHandContainer.setScrollFactor(0);
+    this.cardHandContainer.setDepth(OVERLAY_DEPTH + 5);
+    this.updateCardHand();
+  }
+
+  private updateCardHand(): void {
+    // Destroy old card visuals
+    for (const cv of this.cardVisuals) cv.destroy(true);
+    this.cardVisuals = [];
+
+    if (this.cardHand.length === 0) {
+      const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
+        color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
+      });
+      hint.setOrigin(0.5);
+      this.cardVisuals.push(this.add.container(0, 0).add(hint));
+      this.cardHandContainer?.add(hint);
+      return;
+    }
+
+    const cardWidth = 90;
+    const cardHeight = 56;
+    const gap = 10;
+    const totalWidth = this.cardHand.length * (cardWidth + gap) - gap;
+    let startX = -totalWidth / 2 + cardWidth / 2;
+
+    this.cardHand.forEach((type, index) => {
+      const x = startX + index * (cardWidth + gap);
+      const isSelected = index === this.selectedCardIndex;
+      const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, 0x2a2018, 0.95);
+      panelBg.setStrokeStyle(isSelected ? 2 : 1, isSelected ? 0xd4a843 : 0x5a4a38, isSelected ? 1 : 0.6);
+      panelBg.setInteractive({ useHandCursor: true });
+      panelBg.on('pointerover', () => { if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x4a4030, 1); });
+      panelBg.on('pointerout', () => { if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x2a2018, 0.95); });
+      panelBg.on('pointerdown', () => this.onCardClicked(index));
+
+      const def = BUILDING_DEFINITIONS[type];
+      const label = this.add.text(x, -12, `${def.shortLabel} ${def.name}`, {
+        color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+      });
+      label.setOrigin(0.5);
+
+      const cost = this.add.text(x, 6, getCatalogCostText(type), {
+        color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+      });
+      cost.setOrigin(0.5);
+
+      const card = this.add.container(0, 0);
+      card.add([panelBg, label, cost]);
+      this.cardVisuals.push(card);
+      this.cardHandContainer?.add([panelBg, label, cost]);
+    });
+  }
+
+  private addCardToHand(type: Exclude<BuildingType, 'wall'>): void {
+    this.cardHand.push(type);
+    if (this.cardHandContainer) this.updateCardHand();
+  }
+
+  private onCardClicked(index: number): void {
+    if (index === this.selectedCardIndex) {
+      this.deselectCard();
+    } else {
+      this.selectCard(index);
+    }
+  }
+
+  private selectCard(index: number): void {
+    // Close any open build menu first
+    this.hideBuildMenu();
+    this.destroyBuildSlotHighlights();
+
+    this.selectedCardIndex = index;
+    this.buildMode = true;
+    this.createBuildSlotHighlights();
+    this.updateCardHand();
+  }
+
+  private deselectCard(): void {
+    this.selectedCardIndex = -1;
+    this.buildMode = false;
+    this.destroyBuildSlotHighlights();
+    this.hideBuildMenu();
+    this.updateCardHand();
+  }
+
+  private placeCard(slot: BuildSlot): void {
+    if (this.selectedCardIndex < 0 || this.selectedCardIndex >= this.cardHand.length) return;
+    const type = this.cardHand[this.selectedCardIndex];
+    const center = this.getSlotCenter(slot);
+
+    const result = spendBuildingCost(this.wallet, type);
+    if (!result.ok) {
+      this.showFeedback(`资源不足：${getCatalogCostText(type)}`, '#c8a860');
+      return;
+    }
+    this.wallet = result.wallet;
+    this.buildTower(slot, center, type);
+
+    // Remove the used card
+    this.cardHand.splice(this.selectedCardIndex, 1);
+    this.deselectCard();
   }
 
   private showGameOver(): void {
