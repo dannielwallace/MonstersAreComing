@@ -276,7 +276,6 @@ export class GameScene extends Phaser.Scene {
   private cardPanels: Phaser.GameObjects.Rectangle[] = [];  // interactive backgrounds
   private cardLabels: Phaser.GameObjects.Text[] = [];
   private cardCosts: Phaser.GameObjects.Text[] = [];
-  private cardPulseTweens: Phaser.Tweens.Tween[] = [];  // affordability pulse tweens
   private selectedCardIndex = -1;
   private cardHandContainer?: Phaser.GameObjects.Container;
 
@@ -2680,15 +2679,13 @@ export class GameScene extends Phaser.Scene {
 
   /** Rebuild all card visuals from scratch — call when hand contents change */
   private rebuildCardHand(): void {
-    // Destroy old card visuals and tweens
+    // Destroy old card visuals
     for (const p of this.cardPanels) p.destroy();
     for (const l of this.cardLabels) l.destroy();
     for (const c of this.cardCosts) c.destroy();
-    for (const t of this.cardPulseTweens) t.destroy();
     this.cardPanels = [];
     this.cardLabels = [];
     this.cardCosts = [];
-    this.cardPulseTweens = [];
 
     if (this.cardHand.length === 0) {
       const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
@@ -2733,9 +2730,9 @@ export class GameScene extends Phaser.Scene {
       costColor = '#e0d8c8';
     } else if (canAffordThis) {
       bgColor = 0x3a3020;
-      strokeColor = 0x5a4a38;
-      strokeWidth = 1;
-      strokeAlpha = 0.6;
+      strokeColor = 0x8a7a58;
+      strokeWidth = 2;
+      strokeAlpha = 0.8;
       bgAlpha = 0.95;
       labelColor = '#e0d8c8';
       costColor = '#8a7a68';
@@ -2752,27 +2749,38 @@ export class GameScene extends Phaser.Scene {
     const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
     panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
     panelBg.setData('cardIndex', index);
+    panelBg.setData('cardType', type);
 
-    if (canAffordThis && !isSelected) {
-      panelBg.setInteractive({ useHandCursor: true });
-      panelBg.on('pointerover', () => {
-        if (this.selectedCardIndex !== index) panelBg.setFillStyle(0x4a4030, 1);
-      });
-      panelBg.on('pointerout', () => {
-        if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
-      });
-      panelBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-        pointer.event.stopPropagation();
-        this.onCardClicked(panelBg.getData('cardIndex'));
-      });
-    } else if (isSelected) {
-      panelBg.setInteractive({ useHandCursor: true });
-      panelBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-        pointer.event.stopPropagation();
+    // ALWAYS interactive — pointerdown handler checks affordability
+    panelBg.setInteractive({ useHandCursor: true });
+    panelBg.on('pointerover', () => {
+      if (this.selectedCardIndex !== index) panelBg.setFillStyle(0x4a4030, 1);
+    });
+    panelBg.on('pointerout', () => {
+      if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
+    });
+    panelBg.on('pointerdown', () => {
+      console.log(`[card] pointerdown index=${index}, hand=${this.cardHand.length}, selected=${this.selectedCardIndex}`);
+      if (index === this.selectedCardIndex) {
+        console.log(`[card] deselecting`);
         this.deselectCard();
+      } else {
+        console.log(`[card] selecting index=${index}`);
+        this.selectCard(index);
+      }
+    });
+
+    // Pulse animation for affordable, non-selected cards
+    if (canAffordThis && !isSelected) {
+      const pulse = this.tweens.add({
+        targets: panelBg,
+        strokeAlpha: 1,
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
       });
-    } else {
-      panelBg.disableInteractive();
+      panelBg.setData('pulseTween', pulse);
     }
 
     const def = BUILDING_DEFINITIONS[type];
@@ -2792,6 +2800,8 @@ export class GameScene extends Phaser.Scene {
     this.cardLabels.push(label);
     this.cardCosts.push(cost);
     this.cardHandContainer?.add([panelBg, label, cost]);
+
+    console.log(`[card] created index=${index} type=${type} affordable=${canAffordThis} interactive=${!!panelBg.input} x=${x}`);
   }
 
   /** Update affordability colors on existing cards without recreating them */
@@ -2813,20 +2823,7 @@ export class GameScene extends Phaser.Scene {
         cost.setAlpha(1);
         label.setColor('#e0d8c8');
         cost.setColor('#8a7a68');
-        // Kill old pulse and start new color pulse
-        if (this.cardPulseTweens[index]) this.cardPulseTweens[index].destroy();
-        this.cardPulseTweens[index] = this.tweens.add({
-          targets: panelBg,
-          strokeAlpha: 1,
-          fillAlpha: 1,
-          duration: 700,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
       } else if (isSelected) {
-        // Kill pulse tween
-        if (this.cardPulseTweens[index]) { this.cardPulseTweens[index].destroy(); this.cardPulseTweens[index] = undefined as unknown as Phaser.Tweens.Tween; }
         panelBg.setFillStyle(0x3a3020, 0.95);
         panelBg.setStrokeStyle(2, 0xd4a843, 1);
         label.setAlpha(1);
@@ -2834,8 +2831,6 @@ export class GameScene extends Phaser.Scene {
         label.setColor('#facc15');
         cost.setColor('#e0d8c8');
       } else {
-        // Kill pulse tween
-        if (this.cardPulseTweens[index]) { this.cardPulseTweens[index].destroy(); this.cardPulseTweens[index] = undefined as unknown as Phaser.Tweens.Tween; }
         panelBg.setFillStyle(0x1a1510, 0.6);
         panelBg.setStrokeStyle(1, 0x3a3528, 0.3);
         label.setAlpha(0.5);
@@ -2851,14 +2846,6 @@ export class GameScene extends Phaser.Scene {
     if (this.cardHandContainer) this.rebuildCardHand();
   }
 
-  private onCardClicked(index: number): void {
-    if (index === this.selectedCardIndex) {
-      this.deselectCard();
-    } else {
-      this.selectCard(index);
-    }
-  }
-
   private selectCard(index: number): void {
     // Close any open build menu first
     this.hideBuildMenu();
@@ -2871,6 +2858,7 @@ export class GameScene extends Phaser.Scene {
     this.showFeedback(`点击空地放置 ${def.name}`, '#d4a843');
     this.createBuildSlotHighlights();
     this.rebuildCardHand();
+    console.log(`[card] selected index=${index} type=${type} buildMode=${this.buildMode}`);
   }
 
   private deselectCard(): void {
@@ -2879,6 +2867,7 @@ export class GameScene extends Phaser.Scene {
     this.destroyBuildSlotHighlights();
     this.hideBuildMenu();
     this.rebuildCardHand();
+    console.log(`[card] deselected`);
   }
 
   private placeCard(slot: BuildSlot): void {
