@@ -315,6 +315,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createTerrain();
     this.createRoad();
+    this.createRoadsideScenery();
     this.createVignette();
     this.player = this.createPlayerContainer(this.playerPosition.x, this.playerPosition.y);
     this.caravanBody = this.createCaravan(getCaravanCenter(this.caravanTopLeft));
@@ -551,6 +552,122 @@ export class GameScene extends Phaser.Scene {
         blade.setDepth(1);
       }
     }
+  }
+
+  private createRoadsideScenery(): void {
+    // Medieval ruins along the road (broken walls, arches, collapsed towers)
+    for (let x = 300; x < WORLD_WIDTH; x += 600 + Math.random() * 400) {
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const ruinY = side > 0 ? 260 + Math.random() * 30 : 440 + Math.random() * 30;
+      this.createRoadsideRuin(x + Math.random() * 100, ruinY);
+    }
+
+    // Resource clusters: groups of 2-3 wood/stone nodes placed together
+    for (let x = 500; x < WORLD_WIDTH; x += 800 + Math.random() * 600) {
+      const clusterX = x + Math.random() * 200;
+      const count = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < count; i++) {
+        const cx = clusterX + i * 50 + Math.random() * 30;
+        const cy = 180 + Math.random() * 60 + (Math.random() > 0.5 ? 300 : 0);
+        // Small tree stump or rock as cluster marker
+        if (Math.random() > 0.5) {
+          const stump = this.add.circle(cx, cy, 6 + Math.random() * 4, 0x3a2a18, 0.35);
+          stump.setDepth(1);
+        } else {
+          const rock = this.add.circle(cx, cy, 4 + Math.random() * 5, 0x5a5a5a, 0.25);
+          rock.setDepth(1);
+        }
+      }
+    }
+
+    // Terrain variety: darker patches, rocky areas, grassy clearings
+    for (let x = 0; x < WORLD_WIDTH; x += 300) {
+      const variant = Math.random();
+      if (variant < 0.3) {
+        // Darker mossy patch
+        const px = x + Math.random() * 150;
+        const py = 100 + Math.random() * 520;
+        const moss = this.add.circle(px, py, 40 + Math.random() * 30, 0x1a2a18, 0.2);
+        moss.setDepth(0);
+      } else if (variant < 0.5) {
+        // Rocky area
+        const px = x + Math.random() * 150;
+        const py = 100 + Math.random() * 520;
+        for (let r = 0; r < 3; r++) {
+          const rock = this.add.circle(px + Math.random() * 40 - 20, py + Math.random() * 20 - 10, 3 + Math.random() * 6, 0x5a5a5a, 0.3);
+          rock.setDepth(0);
+        }
+      } else if (variant < 0.6) {
+        // Grassy clearing (slightly brighter)
+        const px = x + Math.random() * 150;
+        const patch = this.add.circle(px, 360 + (Math.random() - 0.5) * 300, 80 + Math.random() * 40, 0x3a4a30, 0.15);
+        patch.setDepth(0);
+      }
+    }
+
+    // Roadside debris: broken shields, bones, cart wheels
+    for (let x = 0; x < WORLD_WIDTH; x += 150) {
+      if (Math.random() > 0.6) continue;
+      const dx = x + Math.random() * 80;
+      const side = Math.random() > 0.5 ? 1 : -1;
+      const dy = side > 0 ? 300 + Math.random() * 8 : 420 + Math.random() * 8;
+      const debrisType = Math.random();
+      if (debrisType < 0.3) {
+        // Small bone fragment
+        const bone = this.add.rectangle(dx, dy, 8 + Math.random() * 6, 2, 0xc8c0b0, 0.25);
+        bone.setDepth(1);
+      } else if (debrisType < 0.6) {
+        // Shield fragment (triangle)
+        const shield = this.add.triangle(dx, dy, -5, 5, 5, 5, 0, -7, 0x6a4a3a, 0.2);
+        shield.setDepth(1);
+      } else {
+        // Stone rubble
+        const rubble = this.add.circle(dx, dy, 4 + Math.random() * 4, 0x7a7568, 0.2);
+        rubble.setDepth(1);
+      }
+    }
+  }
+
+  private createRoadsideRuin(x: number, y: number): void {
+    const ruinType = Math.floor(Math.random() * 3);
+    const g = this.add.graphics();
+    g.setDepth(1);
+
+    if (ruinType === 0) {
+      // Broken wall section
+      const w = 20 + Math.random() * 30;
+      const h = 30 + Math.random() * 40;
+      g.fillStyle(0x9a9588, 0.35);
+      g.fillRect(x - w / 2, y - h, w, h);
+      g.fillStyle(0x7a7568, 0.2);
+      // Cracks
+      g.fillRect(x - w / 4, y - h * 0.6, 2, h * 0.4);
+      // Top jagged edge
+      for (let cx = x - w / 2; cx < x + w / 2; cx += 8) {
+        const ch = Math.random() * 8;
+        g.fillStyle(0x9a9588, 0.3);
+        g.fillRect(cx, y - h - ch, 6, ch);
+      }
+    } else if (ruinType === 1) {
+      // Collapsed pillar
+      g.fillStyle(0x8a8578, 0.3);
+      g.fillRect(x - 4, y - 50, 8, 50);
+      g.fillRect(x - 12, y - 52, 24, 6);
+      // Fallen top piece
+      g.fillStyle(0x8a8578, 0.2);
+      g.fillRect(x + 6, y - 2, 20, 4);
+    } else {
+      // Abandoned camp (fire pit)
+      g.fillStyle(0x3a3020, 0.5);
+      g.fillCircle(x, y, 8);
+      // Ash ring
+      g.lineStyle(1, 0x6a6058, 0.25);
+      g.strokeCircle(x, y, 10);
+      // Charred log
+      g.fillStyle(0x1a1510, 0.4);
+      g.fillRect(x - 12, y - 2, 24, 4);
+    }
+    g.destroy();
   }
 
   private createVignette(): void {
