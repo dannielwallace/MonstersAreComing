@@ -369,8 +369,13 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, deltaMs: number): void {
     const deltaSeconds = deltaMs / 1000;
 
-    // Pause toggle
-    if (!this.gameOver && (Phaser.Input.Keyboard.JustDown(this.keys.P) || Phaser.Input.Keyboard.JustDown(this.keys.ESCAPE))) {
+    // Pause toggle (ESC only if no card selected, P always works)
+    if (!this.gameOver && Phaser.Input.Keyboard.JustDown(this.keys.P)) {
+      if (!this.upgradeSelecting) {
+        this.togglePause();
+      }
+    }
+    if (!this.gameOver && this.selectedCardIndex < 0 && Phaser.Input.Keyboard.JustDown(this.keys.ESCAPE)) {
       if (!this.upgradeSelecting) {
         this.togglePause();
       }
@@ -2359,8 +2364,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleBuildModeToggle(): void {
-    // ESC or B: deselect card, close menus
-    if (this.selectedCardIndex >= 0) {
+    // ESC: deselect card
+    if (this.selectedCardIndex >= 0 && Phaser.Input.Keyboard.JustDown(this.keys.ESCAPE)) {
       this.deselectCard();
       return;
     }
@@ -2760,12 +2765,9 @@ export class GameScene extends Phaser.Scene {
       if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
     });
     panelBg.on('pointerdown', () => {
-      console.log(`[card] pointerdown index=${index}, hand=${this.cardHand.length}, selected=${this.selectedCardIndex}`);
       if (index === this.selectedCardIndex) {
-        console.log(`[card] deselecting`);
         this.deselectCard();
       } else {
-        console.log(`[card] selecting index=${index}`);
         this.selectCard(index);
       }
     });
@@ -2800,8 +2802,6 @@ export class GameScene extends Phaser.Scene {
     this.cardLabels.push(label);
     this.cardCosts.push(cost);
     this.cardHandContainer?.add([panelBg, label, cost]);
-
-    console.log(`[card] created index=${index} type=${type} affordable=${canAffordThis} interactive=${!!panelBg.input} x=${x}`);
   }
 
   /** Update affordability colors on existing cards without recreating them */
@@ -2858,7 +2858,6 @@ export class GameScene extends Phaser.Scene {
     this.showFeedback(`点击空地放置 ${def.name}`, '#d4a843');
     this.createBuildSlotHighlights();
     this.rebuildCardHand();
-    console.log(`[card] selected index=${index} type=${type} buildMode=${this.buildMode}`);
   }
 
   private deselectCard(): void {
@@ -2867,7 +2866,6 @@ export class GameScene extends Phaser.Scene {
     this.destroyBuildSlotHighlights();
     this.hideBuildMenu();
     this.rebuildCardHand();
-    console.log(`[card] deselected`);
   }
 
   private placeCard(slot: BuildSlot): void {
