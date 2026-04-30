@@ -1,5 +1,71 @@
 import Phaser from 'phaser';
 import {
+  addCarriedResource,
+  createCarriedResources,
+  createResourceWallet,
+  depositCarriedResources,
+  harvestNode,
+  repairCaravanWithStone,
+  spendResources,
+  type CarriedResources,
+  type ResourceAmounts,
+  type ResourceWallet,
+} from '../game/resources';
+import {
+  BUILDING_DEFINITIONS,
+  computeAdjacencyBonus,
+  getBuildingDefinition,
+  getBuildingCostText as getCatalogCostText,
+  spendBuildingCost,
+  type PlacedBuilding,
+} from '../game/buildings';
+import {
+  createShopState,
+  purchaseShopItem,
+  rerollShop,
+  type ShopItem,
+  type ShopState,
+} from '../game/shop';
+import {
+  addWeapon,
+  createWeaponState,
+  getWeaponDefinition,
+  markWeaponFired,
+  updateWeaponTimers,
+  type WeaponState,
+} from '../game/weapons';
+import {
+  createSummonState,
+  getMinionDefinition,
+  killMinion,
+  spawnMinion,
+  updateMinionLifetime,
+  type MinionState,
+  type SummonState,
+} from '../game/summons';
+import {
+  completeRewardCircle,
+  createRewardCircle,
+  createRouteEventState,
+  updateRewardCircle,
+  type RouteEvent,
+  type RouteEventState,
+} from '../game/events';
+import {
+  createBossState,
+  startBoss,
+  updateBossState,
+  type BossState,
+} from '../game/boss';
+import {
+  addBuildingDamage,
+  addBuildingKill,
+  addHeroDamage,
+  createRunResults,
+  formatBuildingDpsRows,
+  type RunResults,
+} from '../game/results';
+import {
   getCaravanCenter,
   getSlotWorldPosition,
   CELL_SIZE,
@@ -61,9 +127,8 @@ import {
 const PLAYER_SPEED = 260;
 const CARAVAN_SPEED = 35;
 const GATHER_RANGE = 55;
-const ARROW_TOWER_COST = 20;
-const CATAPULT_COST_WOOD = 25;
-const CATAPULT_COST_STONE = 10;
+const DEPOSIT_RANGE = 88;
+const STONE_REPAIR_RATE = 2;
 const ENEMY_CONTACT_RANGE = 34;
 const ENEMY_DAMAGE_COOLDOWN = 1;
 const WORLD_WIDTH = 50000;
@@ -135,7 +200,7 @@ interface Tower {
   position: Point;
   fireTimer: number;
   base: Phaser.GameObjects.Container;
-  type: 'arrow' | 'catapult';
+  type: Exclude<BuildingType, 'wall'>;
   label: Phaser.GameObjects.Text;
   rangeShape: Phaser.GameObjects.Arc;
 }
@@ -168,8 +233,8 @@ export class GameScene extends Phaser.Scene {
   private upgradeInputCooldown = 0;
   private upgradeChoices: UpgradeDefinition[] = [];
   private upgradeOverlay?: Phaser.GameObjects.Container;
-  private wood = 0;
-  private stone = 0;
+  private wallet: ResourceWallet = createResourceWallet();
+  private carried: CarriedResources = createCarriedResources();
   private elapsedSeconds = 0;
   private waveState: WaveState = createWaveState();
   private feedbackTimer = 0;
@@ -204,6 +269,20 @@ export class GameScene extends Phaser.Scene {
   private buildingOverlay?: Phaser.GameObjects.Container;
   private selectedBuildSlot?: BuildSlot;
   private buildSlotHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+
+  // P1 systems
+  private shop?: ShopState;
+  private shopOverlay?: Phaser.GameObjects.Container;
+  private shopOpen = false;
+  private nextShopAtSeconds = 180;
+  private weapons: WeaponState = createWeaponState();
+  private summons: SummonState = createSummonState();
+  private minionVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private routeEvents: RouteEventState = createRouteEventState();
+  private boss: BossState = createBossState();
+  private bossStarted = false;
+  private results: RunResults = createRunResults();
+  private eventVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
 
   constructor() {
     super('GameScene');
@@ -299,9 +378,15 @@ export class GameScene extends Phaser.Scene {
     this.updateCaravan(deltaSeconds);
     this.updateResourceSpawning(deltaSeconds);
     this.updateGathering(deltaSeconds);
+    this.updateResourceDeposit();
+    this.maybeOpenShop();
     this.updateHeroAttack(deltaSeconds);
+    this.updateWeapons(deltaSeconds);
     this.updateTorch(deltaSeconds);
     this.updateSpawning(deltaSeconds);
+    this.updateRouteEvents(deltaSeconds);
+    this.updateBoss(deltaSeconds);
+    this.updateMinions(deltaSeconds);
     this.updateEnemies(deltaSeconds);
     this.updateTowers(deltaSeconds);
     this.updateCamera();
@@ -313,7 +398,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.victoryAchieved) return;
 
-    if (isVictoryConditionMet(this.waveState.currentWave, this.enemies.length)) {
+    if (this.isP1VictoryConditionMet()) {
       this.showVictory();
     }
     if (this.stats.caravanHealth <= 0) {
@@ -331,8 +416,8 @@ export class GameScene extends Phaser.Scene {
     this.upgradeInputCooldown = 0;
     this.upgradeChoices = [];
     this.upgradeOverlay = undefined;
-    this.wood = 0;
-    this.stone = 0;
+    this.wallet = createResourceWallet();
+    this.carried = createCarriedResources();
     this.elapsedSeconds = 0;
     this.waveState = createWaveState();
     this.feedbackTimer = 0;
@@ -365,6 +450,20 @@ export class GameScene extends Phaser.Scene {
     this.buildingOverlay = undefined;
     this.selectedBuildSlot = undefined;
     this.buildSlotHighlights = new Map();
+    this.shop = undefined;
+    this.shopOpen = false;
+    this.nextShopAtSeconds = 180;
+    this.hideShopOverlay();
+    this.weapons = createWeaponState();
+    this.summons = createSummonState();
+    for (const visual of this.minionVisuals.values()) visual.destroy(true);
+    this.minionVisuals.clear();
+    this.routeEvents = createRouteEventState();
+    this.boss = createBossState();
+    this.bossStarted = false;
+    this.results = createRunResults();
+    for (const visual of this.eventVisuals.values()) visual.destroy(true);
+    this.eventVisuals.clear();
   }
 
   // ═══════════════════════════════════════════════════
@@ -848,11 +947,11 @@ export class GameScene extends Phaser.Scene {
       }
       rendered.gatherTimer += deltaSeconds;
       if (rendered.gatherTimer >= 0.5) {
-        const gathered = Math.min(this.stats.gatherRate * deltaSeconds, node.remaining);
-        node.remaining -= gathered;
-        this.wood = addWood(this.wood, gathered);
-        this.totalWoodGathered += gathered;
-        if (gathered > 0) gatheredThisFrame = true;
+        const result = harvestNode(node, this.stats.gatherRate * deltaSeconds, 1);
+        node.remaining = result.node.remaining;
+        this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
+        this.totalWoodGathered += result.gathered.amount;
+        if (result.gathered.amount > 0) gatheredThisFrame = true;
         rendered.gatherTimer = 0;
       }
       rendered.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
@@ -872,11 +971,11 @@ export class GameScene extends Phaser.Scene {
       }
       rendered.gatherTimer += deltaSeconds;
       if (rendered.gatherTimer >= 0.5) {
-        const gathered = Math.min(this.stats.gatherRate * deltaSeconds, node.remaining);
-        node.remaining -= gathered;
-        this.stone = addStone(this.stone, gathered);
-        this.totalStoneGathered += gathered;
-        if (gathered > 0) gatheredThisFrame = true;
+        const result = harvestNode(node, this.stats.gatherRate * deltaSeconds, 1);
+        node.remaining = result.node.remaining;
+        this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
+        this.totalStoneGathered += result.gathered.amount;
+        if (result.gathered.amount > 0) gatheredThisFrame = true;
         rendered.gatherTimer = 0;
       }
       rendered.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
@@ -1266,27 +1365,41 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildCatapult(slot: BuildSlot, center: Point): void {
-    const rangeShape = this.add.circle(center.x, center.y, this.stats.catapultRange, 0x000000, 0);
-    rangeShape.setStrokeStyle(1, 0x6a5a48, 0.25);
+    this.buildTower(slot, center, 'catapult');
+  }
+
+  private buildTower(slot: BuildSlot, center: Point, buildingType: Exclude<BuildingType, 'wall'>): void {
+    const definition = BUILDING_DEFINITIONS[buildingType];
+    const rangeShape = this.add.circle(center.x, center.y, Math.max(1, definition.range), 0x000000, 0);
+    rangeShape.setStrokeStyle(1, 0x6a5a48, definition.range > 0 ? 0.25 : 0);
     rangeShape.setDepth(5);
 
     const base = this.add.container(center.x, center.y);
     base.setDepth(7);
-    base.add(this.add.circle(0, 0, 16, 0x818181));
-    base.add(this.add.circle(0, 0, 16, 0x626262, 0).setStrokeStyle(2, 0x525252, 0.8));
-    base.add(this.add.rectangle(0, -8, 5, 16, 0xb8b8b8));
+    base.add(this.add.rectangle(0, 0, 28, 28, this.getBuildingColor(buildingType)));
+    base.add(this.add.text(0, 0, definition.shortLabel, {
+      color: '#0a0805', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
+    }).setOrigin(0.5));
 
-    const label = this.add.text(center.x, center.y - 26, '投石车', {
+    const label = this.add.text(center.x, center.y - 26, definition.name, {
       color: '#c0b090', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
     });
     label.setOrigin(0.5); label.setDepth(9);
 
     base.setInteractive();
-    base.on('pointerover', () => rangeShape.setFillStyle(0xff9800, 0.06));
+    base.on('pointerover', () => rangeShape.setFillStyle(0xffa726, 0.05));
     base.on('pointerout', () => rangeShape.setFillStyle(0x000000, 0));
 
-    this.towers.push({ id: `tower-${this.towerSequence++}`, slotId: slot.id, position: { x: center.x, y: center.y }, fireTimer: 0, base, type: 'catapult', label, rangeShape });
+    this.towers.push({ id: `tower-${this.towerSequence++}`, slotId: slot.id, position: { x: center.x, y: center.y }, fireTimer: 0, base, type: buildingType, label, rangeShape });
     this.totalTowersBuilt++;
+  }
+
+  private getBuildingColor(type: Exclude<BuildingType, 'wall'>): number {
+    const colors: Record<Exclude<BuildingType, 'wall'>, number> = {
+      arrow: 0x9d7e73, catapult: 0x818181, fire: 0xd4a843, ice: 0x90caf9,
+      minion: 0x9dd6a3, 'blast-minion': 0xffa726, 'attack-banner': 0xc62828, 'speed-banner': 0x7cb342,
+    };
+    return colors[type];
   }
 
   private buildWall(slot: BuildSlot, center: Point): void {
@@ -1316,40 +1429,91 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateTowers(deltaSeconds: number): void {
+    const placed: PlacedBuilding[] = this.towers.map((candidate) => ({ slotId: candidate.slotId, type: candidate.type }));
+
     for (const tower of this.towers) {
+      const definition = BUILDING_DEFINITIONS[tower.type];
+      if (!definition) continue;
+
+      // Summon buildings
+      if (definition.category === 'summon' && definition.summonType) {
+        tower.fireTimer = Math.max(0, tower.fireTimer - deltaSeconds);
+        if (tower.fireTimer <= 0) {
+          this.summons = spawnMinion(this.summons, definition.summonType, tower.position);
+          this.createMissingMinionVisuals();
+          tower.fireTimer = definition.fireInterval;
+        }
+        continue;
+      }
+
+      // Support buildings don't attack directly
+      if (definition.category === 'support') continue;
+
       tower.fireTimer = Math.max(0, tower.fireTimer - deltaSeconds);
       if (tower.fireTimer > 0) continue;
 
-      if (tower.type === 'arrow') {
-        const target = selectNearestTarget(tower.position, this.enemies, this.stats.towerRange);
+      const adjacency = computeAdjacencyBonus(tower.slotId, GRID_BUILD_SLOTS, placed);
+      const damage = definition.damage * adjacency.damageMultiplier;
+      const interval = Math.max(0.15, definition.fireInterval * adjacency.fireIntervalMultiplier);
+
+      if (tower.type === 'arrow' || tower.type === 'fire' || tower.type === 'ice') {
+        const target = selectNearestTarget(tower.position, this.enemies, definition.range);
         if (!target) continue;
-        const result = applyDamage(target.health, this.stats.towerDamage);
+        const result = applyDamage(target.health, damage);
         (target as any).health = result.health;
-        this.drawArrowProjectile(tower.position, target.position);
-        tower.fireTimer = this.stats.towerFireInterval;
-        if (result.dead) this.removeEnemy(target as any);
-      } else {
-        const target = selectHighestHealthTarget(tower.position, this.enemies, this.stats.catapultRange);
+        this.results = addBuildingDamage(this.results, tower.id, definition.name, damage);
+        if (result.dead) {
+          this.results = addBuildingKill(this.results, tower.id);
+          this.removeEnemy(target as any);
+        }
+        if (tower.type === 'fire' && definition.splashRadius > 0) {
+          for (const enemy of this.enemies) {
+            if (enemy.id === (target as any).id) continue;
+            if (distanceSquared(enemy.position, target.position) <= definition.splashRadius ** 2) {
+              const splashResult = applyDamage(enemy.health, damage * 0.5);
+              enemy.health = splashResult.health;
+              if (splashResult.dead) {
+                this.results = addBuildingKill(this.results, tower.id);
+                this.removeEnemy(enemy);
+              }
+            }
+          }
+          this.drawSplashCircle(target.position, definition.splashRadius);
+        }
+        if (tower.type === 'ice') {
+          this.drawProjectileToTarget(tower.position, target.position, 0x90caf9, 200);
+        } else {
+          this.drawArrowProjectile(tower.position, target.position);
+        }
+        tower.fireTimer = interval;
+      } else if (tower.type === 'catapult' || tower.type === 'blast-minion') {
+        const target = selectHighestHealthTarget(tower.position, this.enemies, definition.range);
         if (!target) continue;
-        const result = applyDamage(target.health, this.stats.catapultDamage);
+        const result = applyDamage(target.health, damage);
         (target as any).health = result.health;
-        this.drawCatapultProjectile(tower.position, target.position);
+        this.results = addBuildingDamage(this.results, tower.id, definition.name, damage);
         const killedIds = new Set<string>();
-        if (result.dead) killedIds.add(target.id);
+        if (result.dead) {
+          this.results = addBuildingKill(this.results, tower.id);
+          killedIds.add(target.id);
+        }
         for (const enemy of this.enemies) {
           if (enemy.id === target.id) continue;
-          if (distanceSquared(enemy.position, target.position) <= this.stats.catapultSplashRadius ** 2) {
-            const splashResult = applyDamage(enemy.health, this.stats.catapultDamage);
+          if (distanceSquared(enemy.position, target.position) <= definition.splashRadius ** 2) {
+            const splashResult = applyDamage(enemy.health, damage);
             enemy.health = splashResult.health;
-            if (splashResult.dead) killedIds.add(enemy.id);
+            if (splashResult.dead) {
+              this.results = addBuildingKill(this.results, tower.id);
+              killedIds.add(enemy.id);
+            }
           }
         }
-        this.drawSplashCircle(target.position, this.stats.catapultSplashRadius);
+        this.drawSplashCircle(target.position, definition.splashRadius);
         for (const id of killedIds) {
           const killed = this.enemies.find((e) => e.id === id);
           if (killed) this.removeEnemy(killed);
         }
-        tower.fireTimer = this.stats.catapultFireInterval;
+        tower.fireTimer = interval;
       }
     }
   }
@@ -1415,6 +1579,292 @@ export class GameScene extends Phaser.Scene {
   // ENEMY DEATH
   // ═══════════════════════════════════════════════════
 
+  // ═══════════════════════════════════════════════════
+  // P1 INTEGRATION: RESOURCES, SHOP, WEAPONS, SUMMONS, EVENTS, BOSS
+  // ═══════════════════════════════════════════════════
+
+  private updateResourceDeposit(): void {
+    const caravanCenter = getCaravanCenter(this.caravanTopLeft);
+    if (distanceSquared(this.playerPosition, caravanCenter) > DEPOSIT_RANGE * DEPOSIT_RANGE) return;
+    const hadResources = this.carried.wood > 0 || this.carried.stone > 0 || this.carried.gold > 0 || this.carried.xp > 0;
+    if (!hadResources) return;
+    const result = depositCarriedResources(this.wallet, this.carried);
+    this.wallet = result.wallet;
+    this.carried = result.carried;
+    if (result.deposited.xp > 0) {
+      this.experience = addExperience(this.experience, result.deposited.xp);
+      this.tryOpenUpgradeChoices();
+    }
+    const repair = repairCaravanWithStone(this.wallet, this.stats.caravanHealth, this.stats.caravanMaxHealth, STONE_REPAIR_RATE);
+    this.wallet = repair.wallet;
+    this.stats.caravanHealth = repair.caravanHealth;
+    if (result.deposited.wood > 0 || result.deposited.stone > 0 || result.deposited.gold > 0) {
+      this.showFeedback(`存入 木${Math.floor(result.deposited.wood)} 石${Math.floor(result.deposited.stone)} 金${Math.floor(result.deposited.gold)}`, '#c0d8a0');
+    }
+  }
+
+  private maybeOpenShop(): void {
+    if (this.shopOpen || this.upgradeSelecting || this.gameOver) return;
+    if (this.elapsedSeconds < this.nextShopAtSeconds) return;
+    this.nextShopAtSeconds += 180;
+    this.shop = createShopState();
+    this.shopOpen = true;
+    this.showShopOverlay();
+  }
+
+  private showShopOverlay(): void {
+    this.hideShopOverlay();
+    if (!this.shop) return;
+    const overlay = this.add.container(640, 360);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(OVERLAY_DEPTH + 22);
+    overlay.add(this.add.rectangle(0, 0, 1280, 720, 0x0a0805, 0.72));
+    overlay.add(this.add.rectangle(0, 0, 680, 420, 0x2a2018, 0.96).setStrokeStyle(2, 0x8a7a58, 0.7));
+    overlay.add(this.add.text(0, -170, '商店', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '30px', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    this.shop.stock.forEach((item, index) => {
+      const y = -90 + index * 58;
+      const button = this.add.rectangle(0, y, 560, 44, 0x3a3020, 1).setInteractive({ useHandCursor: true });
+      button.on('pointerdown', () => this.buyShopItem(item.id));
+      overlay.add(button);
+      overlay.add(this.add.text(-250, y, item.name, { color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px' }).setOrigin(0, 0.5));
+      overlay.add(this.add.text(250, y, this.formatCost(item.cost), { color: '#c8a860', fontFamily: 'monospace', fontSize: '13px' }).setOrigin(1, 0.5));
+    });
+    const reroll = this.add.rectangle(-120, 165, 160, 38, 0x3a3020, 1).setInteractive({ useHandCursor: true });
+    reroll.on('pointerdown', () => this.rerollCurrentShop());
+    const close = this.add.rectangle(120, 165, 160, 38, 0x3a3020, 1).setInteractive({ useHandCursor: true });
+    close.on('pointerdown', () => this.closeShop());
+    overlay.add([reroll, close]);
+    overlay.add(this.add.text(-120, 165, `重随 ${this.shop.rerollCost} 金`, { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5));
+    overlay.add(this.add.text(120, 165, '离开', { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5));
+    this.shopOverlay = overlay;
+  }
+
+  private hideShopOverlay(): void {
+    if (this.shopOverlay) { this.shopOverlay.destroy(true); this.shopOverlay = undefined; }
+  }
+
+  private buyShopItem(itemId: string): void {
+    if (!this.shop) return;
+    const result = purchaseShopItem(this.shop, this.wallet, itemId);
+    if (!result.ok || !result.item) {
+      this.showFeedback('资源不足', '#c8a860');
+      return;
+    }
+    this.shop = result.shop;
+    this.wallet = result.wallet;
+    this.applyShopItem(result.item);
+    this.showShopOverlay();
+    this.updateHud();
+  }
+
+  private rerollCurrentShop(): void {
+    if (!this.shop) return;
+    const result = rerollShop(this.shop, this.wallet);
+    if (!result.ok) {
+      this.showFeedback('金币不足，无法重随', '#c8a860');
+      return;
+    }
+    this.shop = result.shop;
+    this.wallet = result.wallet;
+    this.showShopOverlay();
+  }
+
+  private closeShop(): void {
+    this.shopOpen = false;
+    this.hideShopOverlay();
+  }
+
+  private applyShopItem(item: ShopItem): void {
+    if (item.kind === 'resource' && item.grant) {
+      this.wallet = {
+        ...this.wallet,
+        gold: this.wallet.gold + (item.grant.gold ?? 0),
+        wood: this.wallet.wood + (item.grant.wood ?? 0),
+        stone: this.wallet.stone + (item.grant.stone ?? 0),
+        xp: this.wallet.xp + (item.grant.xp ?? 0),
+      };
+    }
+    if (item.kind === 'repair' && item.repairAmount) {
+      this.stats.caravanHealth = Math.min(this.stats.caravanMaxHealth, this.stats.caravanHealth + item.repairAmount);
+    }
+    if (item.kind === 'building' && item.buildingType) {
+      this.showFeedback(`获得建筑：${getBuildingDefinition(item.buildingType)?.name ?? item.buildingType}`, '#d4a843');
+    }
+    if (item.kind === 'weapon' && item.weaponType) {
+      this.weapons = addWeapon(this.weapons, item.weaponType);
+      this.showFeedback(`获得武器：${getWeaponDefinition(item.weaponType)?.name ?? item.weaponType}`, '#d4a843');
+    }
+  }
+
+  private formatCost(cost: ResourceAmounts): string {
+    const parts: string[] = [];
+    if (cost.wood) parts.push(`${cost.wood} 木`);
+    if (cost.stone) parts.push(`${cost.stone} 石`);
+    if (cost.gold) parts.push(`${cost.gold} 金`);
+    if (cost.xp) parts.push(`${cost.xp} XP`);
+    return parts.length > 0 ? parts.join(' ') : '免费';
+  }
+
+  private updateWeapons(deltaSeconds: number): void {
+    this.weapons = updateWeaponTimers(this.weapons, deltaSeconds);
+    this.weapons.owned = this.weapons.owned.map((weapon) => {
+      if (weapon.cooldownTimer > 0) return weapon;
+      const definition = getWeaponDefinition(weapon.type);
+      if (!definition) return weapon;
+      const target = selectNearestTarget(this.playerPosition, this.enemies, definition.range + weapon.rangeBonus);
+      if (!target) return weapon;
+      const damage = definition.damage * weapon.damageMultiplier;
+      const result = applyDamage(target.health, damage);
+      (target as any).health = result.health;
+      this.showDamageNumber(target.position.x, target.position.y - (target as any).radius - 10, damage);
+      this.results = addHeroDamage(this.results, damage);
+      if (result.dead) {
+        if (definition.createsMinionOnKill) {
+          this.summons = spawnMinion(this.summons, 'decaying', (target as any).position);
+          this.createMissingMinionVisuals();
+        }
+        this.removeEnemy(target as any);
+      }
+      this.drawProjectileToTarget(this.playerPosition, target.position, 0xd4a843, 380);
+      return markWeaponFired(weapon);
+    });
+  }
+
+  private createMissingMinionVisuals(): void {
+    for (const minion of this.summons.minions) {
+      if (this.minionVisuals.has(minion.id)) continue;
+      const definition = getMinionDefinition(minion.type);
+      if (!definition) continue;
+      const visual = this.add.container(minion.position.x, minion.position.y);
+      visual.setDepth(11);
+      visual.add(this.add.circle(0, 0, minion.type === 'bomber' ? 7 : 6, minion.type === 'bomber' ? 0xffa726 : 0x9dd6a3));
+      visual.add(this.add.text(0, -12, definition.name[0], { color: '#102010', fontFamily: 'Arial', fontSize: '9px' }).setOrigin(0.5));
+      this.minionVisuals.set(minion.id, visual);
+    }
+  }
+
+  private updateMinions(deltaSeconds: number): void {
+    this.summons = updateMinionLifetime(this.summons, deltaSeconds);
+    for (const minion of this.summons.minions) {
+      const definition = getMinionDefinition(minion.type);
+      if (!definition) continue;
+      const target = selectNearestTarget(minion.position, this.enemies, 240);
+      if (target) {
+        const dx = target.position.x - minion.position.x;
+        const dy = target.position.y - minion.position.y;
+        const length = Math.max(1, Math.hypot(dx, dy));
+        minion.position.x += (dx / length) * definition.speed * deltaSeconds;
+        minion.position.y += (dy / length) * definition.speed * deltaSeconds;
+        if (distanceSquared(minion.position, target.position) <= definition.attackRange ** 2) {
+          const result = applyDamage(target.health, definition.damage * this.summons.damageMultiplier);
+          (target as any).health = result.health;
+          if (result.dead) this.removeEnemy(target as any);
+          if (minion.type === 'bomber') this.detonateMinion(minion.id);
+        }
+      }
+      this.minionVisuals.get(minion.id)?.setPosition(minion.position.x, minion.position.y);
+    }
+    this.cleanupMissingMinionVisuals();
+  }
+
+  private cleanupMissingMinionVisuals(): void {
+    const activeIds = new Set(this.summons.minions.map((m) => m.id));
+    for (const [id, visual] of this.minionVisuals) {
+      if (!activeIds.has(id)) { visual.destroy(true); this.minionVisuals.delete(id); }
+    }
+  }
+
+  private detonateMinion(minionId: string): void {
+    const result = killMinion(this.summons, minionId);
+    this.summons = result.state;
+    for (const effect of result.effects) {
+      this.drawSplashCircle(effect.position, effect.radius);
+      for (const enemy of [...this.enemies]) {
+        if (distanceSquared(enemy.position, effect.position) <= effect.radius ** 2) {
+          const damage = applyDamage(enemy.health, effect.damage);
+          enemy.health = damage.health;
+          if (damage.dead) this.removeEnemy(enemy);
+        }
+      }
+    }
+    this.cleanupMissingMinionVisuals();
+  }
+
+  private updateRouteEvents(deltaSeconds: number): void {
+    const progress = this.caravanTopLeft.x;
+    if (this.routeEvents.active.length === 0 && progress > 900) {
+      const event = createRewardCircle(`event-${this.routeEvents.nextId}`, { x: this.caravanTopLeft.x + 260, y: this.caravanTopLeft.y - 120 }, { gold: 12 }, 6);
+      this.routeEvents = { active: [event], nextId: this.routeEvents.nextId + 1 };
+      this.createEventVisual(event);
+    }
+    this.routeEvents = {
+      ...this.routeEvents,
+      active: this.routeEvents.active.map((event) => {
+        const occupied = distanceSquared(this.playerPosition, event.position) <= 95 ** 2;
+        const updated = updateRewardCircle(event, deltaSeconds, occupied);
+        const claimed = completeRewardCircle(updated);
+        if (Object.keys(claimed.reward).length > 0) {
+          this.wallet = {
+            ...this.wallet,
+            gold: this.wallet.gold + (claimed.reward.gold ?? 0),
+            wood: this.wallet.wood + (claimed.reward.wood ?? 0),
+            stone: this.wallet.stone + (claimed.reward.stone ?? 0),
+            xp: this.wallet.xp + (claimed.reward.xp ?? 0),
+          };
+          this.showFeedback('奖励完成', '#d4a843');
+        }
+        return claimed.event;
+      }),
+    };
+    this.cleanupCompletedEvents();
+  }
+
+  private createEventVisual(event: RouteEvent): void {
+    const visual = this.add.container(event.position.x, event.position.y);
+    visual.setDepth(6);
+    const circle = this.add.circle(0, 0, 30, 0xd4a843, 0.15);
+    circle.setStrokeStyle(2, 0xd4a843, 0.5);
+    visual.add(circle);
+    visual.add(this.add.text(0, 0, '?', {
+      color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
+    }).setOrigin(0.5));
+    this.eventVisuals.set(event.id, visual);
+  }
+
+  private cleanupCompletedEvents(): void {
+    for (const event of this.routeEvents.active) {
+      if (event.completed && event.claimed) {
+        this.eventVisuals.get(event.id)?.destroy(true);
+        this.eventVisuals.delete(event.id);
+      }
+    }
+    this.routeEvents = {
+      ...this.routeEvents,
+      active: this.routeEvents.active.filter((e) => !(e.completed && e.claimed)),
+    };
+  }
+
+  private updateBoss(deltaSeconds: number): void {
+    if (!this.boss.active && this.elapsedSeconds >= 600) {
+      this.boss = startBoss(500);
+      this.bossStarted = true;
+      this.spawnEnemy('boss');
+      this.showWaveBanner(this.waveState.currentWave + 1);
+    }
+    const result = updateBossState(this.boss, deltaSeconds);
+    this.boss = result.state;
+    for (let i = 0; i < result.spawnEggs; i += 1) {
+      this.spawnEnemyNear('burst', getCaravanCenter(this.caravanTopLeft), i);
+    }
+  }
+
+  private isP1VictoryConditionMet(): boolean {
+    const bossAlive = this.enemies.some((enemy) => enemy.type === 'boss');
+    return this.elapsedSeconds >= 720 && this.bossStarted && !this.boss.active && !bossAlive;
+  }
+
   private removeEnemy(enemy: Enemy): void {
     // 死亡爆炸粒子（使用敌人类型颜色）
     const deathColors: Record<EnemyTypeId, number> = {
@@ -1455,6 +1905,9 @@ export class GameScene extends Phaser.Scene {
     enemy.healthBarBg.destroy();
     this.enemies = this.enemies.filter((e) => e.id !== enemy.id);
     this.totalEnemiesKilled++;
+    if (enemy.type === 'boss') {
+      this.boss = { ...this.boss, active: false, health: 0 };
+    }
     this.awardEnemyExperience(enemy.experienceReward);
   }
 
@@ -1763,11 +2216,12 @@ export class GameScene extends Phaser.Scene {
 
     type BuildOption = { type: BuildingType; label: string; cost: string };
     const options: BuildOption[] = slot.buildingType === 'wall'
-      ? [{ type: 'wall', label: getBuildingName('wall'), cost: getBuildingCostText('wall') }]
-      : [
-          { type: 'arrow', label: getBuildingName('arrow'), cost: getBuildingCostText('arrow') },
-          { type: 'catapult', label: getBuildingName('catapult'), cost: getBuildingCostText('catapult') },
-        ];
+      ? [{ type: 'wall' as BuildingType, label: getBuildingName('wall'), cost: getBuildingCostText('wall') }]
+      : (['arrow', 'catapult', 'fire', 'ice', 'minion', 'blast-minion', 'attack-banner', 'speed-banner'] as BuildingType[]).map((type) => ({
+          type,
+          label: `${BUILDING_DEFINITIONS[type].shortLabel} ${BUILDING_DEFINITIONS[type].name}`,
+          cost: getCatalogCostText(type),
+        }));
 
     options.forEach((option, index) => {
       const y = (slot.buildingType === 'wall' ? 18 : 4) + index * 30;
@@ -1791,30 +2245,16 @@ export class GameScene extends Phaser.Scene {
 
   private buildFromMenu(buildingType: BuildingType, slot: BuildSlot): void {
     const center = this.getSlotCenter(slot);
-    switch (buildingType) {
-      case 'arrow': {
-        const result = spendWood(this.wood, ARROW_TOWER_COST);
-        if (!result.ok) { this.showFeedback(`木材不足，需要 ${ARROW_TOWER_COST}`, '#c8a860'); return; }
-        this.wood = result.wood;
-        this.buildArrowTower(slot, center);
-        break;
-      }
-      case 'catapult': {
-        const wr = spendWood(this.wood, CATAPULT_COST_WOOD);
-        if (!wr.ok) { this.showFeedback(`木材不足，需要 ${CATAPULT_COST_WOOD}`, '#c8a860'); return; }
-        const sr = spendStone(this.stone, CATAPULT_COST_STONE);
-        if (!sr.ok) { this.showFeedback(`石料不足，需要 ${CATAPULT_COST_STONE}`, '#c8a860'); return; }
-        this.wood = wr.wood; this.stone = sr.wood;
-        this.buildCatapult(slot, center);
-        break;
-      }
-      case 'wall': {
-        const result = spendWood(this.wood, WALL_COST);
-        if (!result.ok) { this.showFeedback(`木材不足，需要 ${WALL_COST}`, '#c8a860'); return; }
-        this.wood = result.wood;
-        this.buildWall(slot, center);
-        break;
-      }
+    if (buildingType === 'wall') {
+      const result = spendResources(this.wallet, { wood: WALL_COST });
+      if (!result.ok) { this.showFeedback(`木材不足，需要 ${WALL_COST}`, '#c8a860'); return; }
+      this.wallet = result.wallet;
+      this.buildWall(slot, center);
+    } else {
+      const result = spendBuildingCost(this.wallet, buildingType);
+      if (!result.ok) { this.showFeedback(`资源不足：${getCatalogCostText(buildingType)}`, '#c8a860'); return; }
+      this.wallet = result.wallet;
+      this.buildTower(slot, center, buildingType);
     }
     this.hideBuildMenu();
     this.removeBuildSlotHighlight(slot.id);
@@ -1886,7 +2326,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateHud(): void {
     const objective = getObjectiveText({
-      wood: this.wood, towerCost: ARROW_TOWER_COST,
+      wood: this.wallet.wood, towerCost: BUILDING_DEFINITIONS.arrow.cost.wood ?? 0,
       hasOpenTowerSlot: this.hasOpenTowerSlot(),
       caravanThreatened: this.isCaravanThreatened(),
     });
@@ -1897,7 +2337,8 @@ export class GameScene extends Phaser.Scene {
 
     this.hud.setText([
       `${hpColor ? `行城生命：` : ''}${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`,
-      `木材：${Math.floor(this.wood)}  石料：${Math.floor(this.stone)}`,
+      `木材：${Math.floor(this.wallet.wood)}  石料：${Math.floor(this.wallet.stone)}  金币：${Math.floor(this.wallet.gold)}`,
+      `携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`,
       `等级：${this.experience.level}  经验：${Math.floor(this.experience.experience)}/${requiredExperienceForLevel(this.experience.level)}`,
       `波次：${this.waveState.currentWave}/${MAX_WAVE}  下一波：${Math.ceil(this.waveState.nextWaveTimer)}s`,
       `箭塔：${this.towers.length}  城墙：${this.walls.length}/${wallSlotCount}`,
@@ -1915,7 +2356,9 @@ export class GameScene extends Phaser.Scene {
       woodGathered: this.totalWoodGathered, stoneGathered: this.totalStoneGathered,
       wallsBuilt: this.totalWallsBuilt,
     };
-    const text = `行城陷落\n\n${formatVictoryStats(stats, false)}\n\n按 R 重新开始`;
+    const dpsRows = formatBuildingDpsRows(this.results, this.elapsedSeconds).slice(0, 6).join('\n');
+    const resultText = `英雄伤害：${Math.floor(this.results.heroDamage)}\n行城建筑伤害：${Math.floor(this.results.cityDamage)}\n${dpsRows}`;
+    const text = `行城陷落\n\n${formatVictoryStats(stats, false)}\n\n${resultText}\n\n按 R 重新开始`;
     this.gameOverText = this.add.text(640, 320, text, {
       align: 'center', color: '#fee2e2', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '24px', lineSpacing: 6,
     });
@@ -1933,7 +2376,9 @@ export class GameScene extends Phaser.Scene {
       woodGathered: this.totalWoodGathered, stoneGathered: this.totalStoneGathered,
       wallsBuilt: this.totalWallsBuilt,
     };
-    const text = `胜利！\n\n${formatVictoryStats(stats, true)}\n\n按 R 再来一局`;
+    const dpsRows = formatBuildingDpsRows(this.results, this.elapsedSeconds).slice(0, 6).join('\n');
+    const resultText = `英雄伤害：${Math.floor(this.results.heroDamage)}\n行城建筑伤害：${Math.floor(this.results.cityDamage)}\n${dpsRows}`;
+    const text = `胜利！\n\n${formatVictoryStats(stats, true)}\n\n${resultText}\n\n按 R 再来一局`;
     this.victoryText = this.add.text(640, 300, text, {
       align: 'center', color: '#bbf7d0', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '24px', lineSpacing: 6,
     });
