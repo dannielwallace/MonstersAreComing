@@ -822,6 +822,18 @@ export class GameScene extends Phaser.Scene {
     this.floatingTexts.push({ text: t, timer: 0.8 });
   }
 
+  private showFloatingResource(x: number, y: number, text: string, color: string): void {
+    const t = this.add.text(x + (Math.random() - 0.5) * 16, y, text, {
+      color,
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '12px',
+      fontStyle: 'bold',
+    });
+    t.setOrigin(0.5);
+    t.setDepth(20);
+    this.floatingTexts.push({ text: t, timer: 1.2 });
+  }
+
   // ═══════════════════════════════════════════════════
   // CARAVAN (中世纪城堡)
   // ═══════════════════════════════════════════════════
@@ -1089,7 +1101,11 @@ export class GameScene extends Phaser.Scene {
         node.remaining = result.node.remaining;
         this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
         this.totalWoodGathered += result.gathered.amount;
-        if (result.gathered.amount > 0) gatheredThisFrame = true;
+        if (result.gathered.amount > 0) {
+          gatheredThisFrame = true;
+          const label = result.gathered.type === 'wood' ? '木' : result.gathered.type === 'stone' ? '石' : '金';
+          this.showFloatingResource(node.position.x, node.position.y - 20, `+${Math.floor(result.gathered.amount)}${label}`, '#c0d8a0');
+        }
         rendered.gatherTimer = 0;
       }
       rendered.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
@@ -1113,7 +1129,10 @@ export class GameScene extends Phaser.Scene {
         node.remaining = result.node.remaining;
         this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
         this.totalStoneGathered += result.gathered.amount;
-        if (result.gathered.amount > 0) gatheredThisFrame = true;
+        if (result.gathered.amount > 0) {
+          gatheredThisFrame = true;
+          this.showFloatingResource(node.position.x, node.position.y - 20, `+${Math.floor(result.gathered.amount)}石`, '#b0a898');
+        }
         rendered.gatherTimer = 0;
       }
       rendered.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
@@ -1144,17 +1163,21 @@ export class GameScene extends Phaser.Scene {
 
   private showWaveBanner(wave: number): void {
     if (this.waveBanner) this.waveBanner.destroy();
-    this.waveBanner = this.add.text(640, 280, `第 ${wave} 波`, {
-      color: '#c62828',
+    const isBossWave = wave >= 8 && wave % 4 === 0;
+    const text = isBossWave ? `⚠ 首领来袭 — 第 ${wave} 波` : `第 ${wave} 波`;
+    const fontSize = isBossWave ? '40px' : '48px';
+    const color = isBossWave ? '#ff1744' : '#c62828';
+    this.waveBanner = this.add.text(640, 280, text, {
+      color,
       fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
-      fontSize: '48px',
+      fontSize,
       fontStyle: 'bold',
     });
     this.waveBanner.setOrigin(0.5);
     this.waveBanner.setScrollFactor(0);
     this.waveBanner.setDepth(OVERLAY_DEPTH + 10);
     this.waveBanner.setAlpha(0);
-    this.waveBanner.setScale(2);
+    this.waveBanner.setScale(isBossWave ? 1.8 : 2);
     this.tweens.add({
       targets: this.waveBanner,
       alpha: 1,
@@ -1162,7 +1185,23 @@ export class GameScene extends Phaser.Scene {
       duration: 300,
       ease: 'Back.easeOut',
     });
-    this.waveBannerTimer = 2;
+
+    // Boss wave: add red screen flash
+    if (isBossWave) {
+      const flash = this.add.graphics();
+      flash.setScrollFactor(0);
+      flash.setDepth(OVERLAY_DEPTH + 8);
+      flash.fillStyle(0xff0000, 0.15);
+      flash.fillRect(0, 0, 1280, 720);
+      this.tweens.add({
+        targets: flash,
+        alpha: 0,
+        duration: 800,
+        onComplete: () => flash.destroy(),
+      });
+    }
+
+    this.waveBannerTimer = isBossWave ? 3 : 2;
   }
 
   private updateWaveBanner(deltaSeconds: number): void {
@@ -1744,6 +1783,7 @@ export class GameScene extends Phaser.Scene {
     this.stats.caravanHealth = repair.caravanHealth;
     if (result.deposited.wood > 0 || result.deposited.stone > 0 || result.deposited.gold > 0) {
       this.showFeedback(`存入 木${Math.floor(result.deposited.wood)} 石${Math.floor(result.deposited.stone)} 金${Math.floor(result.deposited.gold)}`, '#c0d8a0');
+      this.showFloatingResource(caravanCenter.x, caravanCenter.y - 80, `+${Math.floor(result.deposited.wood)}木 +${Math.floor(result.deposited.stone)}石`, '#c0d8a0');
     }
   }
 
@@ -2032,16 +2072,18 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // XP 球（更大更亮）
+    // XP 球：飞向玩家，吸入后消失
     const xpOrb = this.add.circle(enemy.position.x, enemy.position.y, 5, 0x88ff23, 0.9);
     xpOrb.setStrokeStyle(1.5, 0x76dd27, 0.6);
     xpOrb.setDepth(17);
     this.tweens.add({
       targets: xpOrb,
-      y: enemy.position.y - 40,
-      alpha: 0,
-      scale: 1.5,
-      duration: 500,
+      x: this.playerPosition.x,
+      y: this.playerPosition.y,
+      alpha: 0.3,
+      scale: 0.5,
+      duration: 400,
+      ease: 'Power2',
       onComplete: () => xpOrb.destroy(),
     });
 
@@ -2090,6 +2132,16 @@ export class GameScene extends Phaser.Scene {
     overlay.setDepth(OVERLAY_DEPTH + 20);
 
     overlay.add(this.add.rectangle(0, 0, 1280, 720, 0x0a0805, 0.75));
+
+    // Level-up flash effect
+    const flash = this.add.rectangle(0, 0, 1280, 720, 0xd4a843, 0.25);
+    flash.setDepth(0);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 400,
+      onComplete: () => flash.destroy(),
+    });
 
     const panel = this.add.rectangle(0, 0, 720, 400, 0x2a2018, 0.96);
     panel.setStrokeStyle(2, 0x8a7a58, 0.7);
