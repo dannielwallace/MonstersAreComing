@@ -5,11 +5,11 @@ import { addWood, spendWood } from '../game/inventory';
 import { distanceSquared, moveToward, normalizeInput, type Point } from '../game/math';
 import { getObjectiveText } from '../game/objective';
 import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
+import { getEnemyDefinition, type EnemyTypeId } from '../game/enemies';
 import {
   addExperience,
   consumePendingLevelUp,
   createExperienceState,
-  ENEMY_EXPERIENCE_REWARD,
   hasPendingLevelUp,
   requiredExperienceForLevel,
   type ExperienceState,
@@ -27,10 +27,7 @@ const PLAYER_SPEED = 245;
 const CARAVAN_SPEED = 24;
 const GATHER_RANGE = 34;
 const TOWER_COST = 20;
-const ENEMY_HEALTH = 30;
-const ENEMY_SPEED = 72;
 const ENEMY_CONTACT_RANGE = 34;
-const ENEMY_CONTACT_DAMAGE = 5;
 const ENEMY_DAMAGE_COOLDOWN = 1;
 const WORLD_WIDTH = 12000;
 const OVERLAY_DEPTH = 1000;
@@ -53,10 +50,16 @@ interface WoodNode {
 
 interface Enemy {
   id: string;
+  type: EnemyTypeId;
   position: Point;
+  radius: number;
   health: number;
+  speed: number;
+  contactDamage: number;
+  experienceReward: number;
   damageTimer: number;
   shape: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
 }
 
 interface Tower {
@@ -333,39 +336,61 @@ export class GameScene extends Phaser.Scene {
     const result = updateSpawnTimer(this.spawnTimer, deltaSeconds, interval);
     this.spawnTimer = result.timer;
 
+    const spawnBatchStart = this.enemySequence;
     for (let index = 0; index < result.spawnCount; index += 1) {
-      this.spawnEnemy();
+      this.spawnEnemy('grunt', index, spawnBatchStart);
     }
   }
 
-  private spawnEnemy(): void {
-    const sideOffset = (this.enemySequence % 3) - 1;
+  private spawnEnemy(type: EnemyTypeId = 'grunt', waveIndex = 0, spawnBatchStart = this.enemySequence): void {
+    const definition = getEnemyDefinition(type);
+    if (!definition) {
+      return;
+    }
+
+    const placementIndex = spawnBatchStart + waveIndex;
+    const sideOffset = (placementIndex % 3) - 1;
+    const depthOffset = Math.floor(waveIndex / 3) * 72;
     const cameraRightEdge = this.cameras.main.worldView.right;
-    const forwardSpawnX = cameraRightEdge + SPAWN_MARGIN + (this.enemySequence % 2) * 160;
+    const forwardSpawnX = cameraRightEdge + SPAWN_MARGIN + (placementIndex % 2) * 160 + depthOffset;
     const position = {
       x: Math.min(forwardSpawnX, WORLD_WIDTH - SPAWN_MARGIN),
       y: Phaser.Math.Clamp(this.caravanPosition.y + sideOffset * 210, 60, 660),
     };
-    const shape = this.add.circle(position.x, position.y, 13, 0xef4444);
+    const shape = this.add.circle(position.x, position.y, definition.radius, definition.color);
+    const label = this.add.text(position.x, position.y - definition.radius - 18, definition.label, {
+      color: '#f8fafc',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '13px',
+    });
+    label.setOrigin(0.5);
+
     this.enemies.push({
       id: `enemy-${this.enemySequence++}`,
+      type,
       position,
-      health: ENEMY_HEALTH,
+      radius: definition.radius,
+      health: definition.health,
+      speed: definition.speed,
+      contactDamage: definition.contactDamage,
+      experienceReward: definition.experienceReward,
       damageTimer: 0,
       shape,
+      label,
     });
   }
 
   private updateEnemies(deltaSeconds: number): void {
     for (const enemy of this.enemies) {
-      enemy.position = moveToward(enemy.position, this.caravanPosition, ENEMY_SPEED * deltaSeconds);
+      enemy.position = moveToward(enemy.position, this.caravanPosition, enemy.speed * deltaSeconds);
       enemy.shape.setPosition(enemy.position.x, enemy.position.y);
+      enemy.label.setPosition(enemy.position.x, enemy.position.y - enemy.radius - 18);
       enemy.damageTimer = Math.max(0, enemy.damageTimer - deltaSeconds);
 
       const isTouchingCaravan =
         distanceSquared(enemy.position, this.caravanPosition) <= ENEMY_CONTACT_RANGE * ENEMY_CONTACT_RANGE;
       if (isTouchingCaravan && enemy.damageTimer <= 0) {
-        this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - ENEMY_CONTACT_DAMAGE);
+        this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - enemy.contactDamage);
         enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
         this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
         this.showFeedback('行城遭到攻击！', '#fecaca');
@@ -392,18 +417,19 @@ export class GameScene extends Phaser.Scene {
 
       if (result.dead) {
         target.shape.destroy();
+        target.label.destroy();
         this.enemies = this.enemies.filter((enemy) => enemy.id !== target.id);
-        this.awardEnemyExperience();
+        this.awardEnemyExperience(target.experienceReward);
       }
     }
   }
 
-  private awardEnemyExperience(): void {
+  private awardEnemyExperience(amount: number): void {
     if (this.gameOver || this.stats.caravanHealth <= 0) {
       return;
     }
 
-    this.experience = addExperience(this.experience, ENEMY_EXPERIENCE_REWARD);
+    this.experience = addExperience(this.experience, amount);
     this.tryOpenUpgradeChoices();
   }
 
