@@ -4,7 +4,7 @@ import { applyDamage, selectNearestTarget } from '../game/combat';
 import { addWood, spendWood } from '../game/inventory';
 import { distanceSquared, moveToward, normalizeInput, type Point } from '../game/math';
 import { getObjectiveText } from '../game/objective';
-import { getSpawnInterval, updateSpawnTimer } from '../game/spawnDirector';
+import { createWaveState, updateWaveState, type WaveState } from '../game/waveDirector';
 import { getEnemyDefinition, type EnemyTypeId } from '../game/enemies';
 import {
   addExperience,
@@ -35,7 +35,7 @@ const SPAWN_MARGIN = 96;
 const THREAT_RANGE = 260;
 const FEEDBACK_DURATION = 1.4;
 const UPGRADE_INPUT_COOLDOWN = 0.2;
-const FEEDBACK_Y = 236;
+const FEEDBACK_Y = 306;
 const DAMAGE_FLASH_DURATION = 0.18;
 const CARAVAN_NORMAL_COLOR = 0x4caf50;
 const CARAVAN_DAMAGE_COLOR = 0xef4444;
@@ -91,7 +91,7 @@ export class GameScene extends Phaser.Scene {
   private upgradeOverlay?: Phaser.GameObjects.Container;
   private wood = 0;
   private elapsedSeconds = 0;
-  private spawnTimer = 0;
+  private waveState: WaveState = createWaveState();
   private feedbackTimer = 0;
   private caravanDamageFlashTimer = 0;
   private enemySequence = 0;
@@ -191,7 +191,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeOverlay = undefined;
     this.wood = 0;
     this.elapsedSeconds = 0;
-    this.spawnTimer = 0;
+    this.waveState = createWaveState();
     this.feedbackTimer = 0;
     this.caravanDamageFlashTimer = 0;
     this.enemySequence = 0;
@@ -332,14 +332,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateSpawning(deltaSeconds: number): void {
-    const interval = getSpawnInterval(this.elapsedSeconds);
-    const result = updateSpawnTimer(this.spawnTimer, deltaSeconds, interval);
-    this.spawnTimer = result.timer;
+    const result = updateWaveState(this.waveState, deltaSeconds);
+    this.waveState = result.state;
+
+    if (!result.startedWave) {
+      return;
+    }
+
+    this.showFeedback(`第 ${this.waveState.currentWave} 波来袭！`);
 
     const spawnBatchStart = this.enemySequence;
-    for (let index = 0; index < result.spawnCount; index += 1) {
-      this.spawnEnemy('grunt', index, spawnBatchStart);
-    }
+    result.spawnedEnemies.forEach((type, index) => {
+      this.spawnEnemy(type, index, spawnBatchStart);
+    });
   }
 
   private spawnEnemy(type: EnemyTypeId = 'grunt', waveIndex = 0, spawnBatchStart = this.enemySequence): void {
@@ -618,16 +623,20 @@ export class GameScene extends Phaser.Scene {
       caravanThreatened: this.isCaravanThreatened(),
     });
 
-    this.hud.setText([
+    const lines = [
       `行城生命：${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`,
       `木材：${Math.floor(this.wood)}`,
       `等级：${this.experience.level}`,
       `经验：${Math.floor(this.experience.experience)}/${requiredExperienceForLevel(this.experience.level)}`,
-      `时间：${this.elapsedSeconds.toFixed(1)} 秒`,
-      `箭塔：${this.towers.length}/${STAGE0_BUILD_SLOTS.length}`,
+      `波次：${this.waveState.currentWave}`,
+      `下一波：${Math.ceil(this.waveState.nextWaveTimer)} 秒`,
+      `时间：${Math.floor(this.elapsedSeconds)} 秒`,
+      `箭塔：${this.towers.length}`,
       `空格：建造箭塔（${TOWER_COST} 木材）`,
       objective,
-    ]);
+    ];
+
+    this.hud.setText(lines);
   }
 
   private showGameOver(): void {
