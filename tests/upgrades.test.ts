@@ -56,13 +56,13 @@ describe('applyUpgrade', () => {
   });
 
   it('increases gather rate for 伐木熟手', () => {
-    expect(applyUpgrade(baseStats, 'gather-rate').gatherRate).toBe(10);
+    expect(applyUpgrade(baseStats, 'gather-rate').gatherRate).toBe(12.5);
   });
 
   it('increases max health and current health for 坚固车体', () => {
     expect(applyUpgrade({ ...baseStats, caravanHealth: 70 }, 'caravan-max-health')).toEqual({
       ...baseStats,
-      caravanMaxHealth: 120,
+      caravanMaxHealth: 520,
       caravanHealth: 90,
     });
   });
@@ -70,12 +70,12 @@ describe('applyUpgrade', () => {
   it('repairs current health without exceeding max health for 前线修补', () => {
     expect(applyUpgrade({ ...baseStats, caravanHealth: 90 }, 'caravan-repair')).toEqual({
       ...baseStats,
-      caravanHealth: 100,
+      caravanHealth: 115,
     });
   });
 
   it('increases wall max health for 加固城墙', () => {
-    expect(applyUpgrade(baseStats, 'wall-health').wallMaxHealth).toBe(90);
+    expect(applyUpgrade(baseStats, 'wall-health').wallMaxHealth).toBe(110);
   });
 
   it('signals wall repair for 紧急抢修', () => {

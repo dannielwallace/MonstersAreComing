@@ -128,7 +128,7 @@ const PLAYER_SPEED = 260;
 const CARAVAN_SPEED = 35;
 const GATHER_RANGE = 55;
 const DEPOSIT_RANGE = 88;
-const STONE_REPAIR_RATE = 2;
+const STONE_REPAIR_RATE = 5;
 const ENEMY_CONTACT_RANGE = 34;
 const ENEMY_DAMAGE_COOLDOWN = 1;
 const WORLD_WIDTH = 50000;
@@ -333,6 +333,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createInitialWoodNodes();
     this.createInitialStoneNodes();
+    this.createStartingTower();
     this.updateHud();
 
     // Hint text
@@ -613,8 +614,9 @@ export class GameScene extends Phaser.Scene {
       // 造成伤害
       for (const enemy of this.enemies) {
         if (damagedIds.includes(enemy.id)) {
-          enemy.health = Math.max(0, enemy.health - HERO_ATTACK_DAMAGE);
-          this.showDamageNumber(enemy.position.x, enemy.position.y - enemy.radius - 10, HERO_ATTACK_DAMAGE);
+          const damage = Math.round(HERO_ATTACK_DAMAGE * this.stats.weaponDamageMultiplier);
+          enemy.health = Math.max(0, enemy.health - damage);
+          this.showDamageNumber(enemy.position.x, enemy.position.y - enemy.radius - 10, damage);
           enemy.hitFlashTimer = 0.1;
           this.screenShake();
           if (enemy.health <= 0) {
@@ -1339,6 +1341,14 @@ export class GameScene extends Phaser.Scene {
   // TOWERS
   // ═══════════════════════════════════════════════════
 
+  private createStartingTower(): void {
+    const openSlots = GRID_BUILD_SLOTS.filter((s) => s.buildingType !== 'wall');
+    if (openSlots.length === 0) return;
+    const slot = openSlots[0];
+    const center = this.getSlotCenter(slot);
+    this.buildTower(slot, center, 'arrow');
+  }
+
   private buildArrowTower(slot: BuildSlot, center: Point): void {
     const rangeShape = this.add.circle(center.x, center.y, this.stats.towerRange, 0x000000, 0);
     rangeShape.setStrokeStyle(1, 0x6a5a48, 0.25);
@@ -1453,11 +1463,16 @@ export class GameScene extends Phaser.Scene {
       if (tower.fireTimer > 0) continue;
 
       const adjacency = computeAdjacencyBonus(tower.slotId, GRID_BUILD_SLOTS, placed);
-      const damage = definition.damage * adjacency.damageMultiplier;
-      const interval = Math.max(0.15, definition.fireInterval * adjacency.fireIntervalMultiplier);
+      const isArrowType = tower.type === 'arrow';
+      const baseDamage = definition.damage;
+      const towerDmgBonus = isArrowType ? this.stats.towerDamage : 0;
+      const damage = (baseDamage + towerDmgBonus) * adjacency.damageMultiplier;
+      const towerReloadMult = isArrowType ? this.stats.towerFireInterval / 0.55 : this.stats.catapultFireInterval / 1.8;
+      const interval = Math.max(0.15, definition.fireInterval * adjacency.fireIntervalMultiplier * towerReloadMult);
 
       if (tower.type === 'arrow' || tower.type === 'fire' || tower.type === 'ice') {
-        const target = selectNearestTarget(tower.position, this.enemies, definition.range);
+        const range = definition.range + (isArrowType ? this.stats.towerRange - 190 : 0);
+        const target = selectNearestTarget(tower.position, this.enemies, range);
         if (!target) continue;
         const result = applyDamage(target.health, damage);
         (target as any).health = result.health;
@@ -1713,9 +1728,10 @@ export class GameScene extends Phaser.Scene {
       if (weapon.cooldownTimer > 0) return weapon;
       const definition = getWeaponDefinition(weapon.type);
       if (!definition) return weapon;
-      const target = selectNearestTarget(this.playerPosition, this.enemies, definition.range + weapon.rangeBonus);
+      const effectiveRange = definition.range + weapon.rangeBonus + this.stats.weaponRangeBonus;
+      const target = selectNearestTarget(this.playerPosition, this.enemies, effectiveRange);
       if (!target) return weapon;
-      const damage = definition.damage * weapon.damageMultiplier;
+      const damage = Math.round(definition.damage * weapon.damageMultiplier * this.stats.weaponDamageMultiplier);
       const result = applyDamage(target.health, damage);
       (target as any).health = result.health;
       this.showDamageNumber(target.position.x, target.position.y - (target as any).radius - 10, damage);
@@ -1728,7 +1744,8 @@ export class GameScene extends Phaser.Scene {
         this.removeEnemy(target as any);
       }
       this.drawProjectileToTarget(this.playerPosition, target.position, 0xd4a843, 380);
-      return markWeaponFired(weapon);
+      const cooldown = definition.cooldown * weapon.cooldownMultiplier * this.stats.weaponCooldownMultiplier;
+      return { ...weapon, cooldownTimer: cooldown };
     });
   }
 
@@ -1758,7 +1775,7 @@ export class GameScene extends Phaser.Scene {
         minion.position.x += (dx / length) * definition.speed * deltaSeconds;
         minion.position.y += (dy / length) * definition.speed * deltaSeconds;
         if (distanceSquared(minion.position, target.position) <= definition.attackRange ** 2) {
-          const result = applyDamage(target.health, definition.damage * this.summons.damageMultiplier);
+          const result = applyDamage(target.health, definition.damage * this.summons.damageMultiplier * this.stats.summonDamageMultiplier);
           (target as any).health = result.health;
           if (result.dead) this.removeEnemy(target as any);
           if (minion.type === 'bomber') this.detonateMinion(minion.id);
