@@ -273,12 +273,11 @@ export class GameScene extends Phaser.Scene {
 
   // Card hand
   private cardHand: Exclude<BuildingType, 'wall'>[] = [];
-  private cardVisuals: Phaser.GameObjects.Container[] = [];
+  private cardPanels: Phaser.GameObjects.Rectangle[] = [];  // interactive backgrounds
+  private cardLabels: Phaser.GameObjects.Text[] = [];
+  private cardCosts: Phaser.GameObjects.Text[] = [];
   private selectedCardIndex = -1;
   private cardHandContainer?: Phaser.GameObjects.Container;
-  private cardBounceTweens: Phaser.Tweens.Tween[] = [];
-  private worldClickZone?: Phaser.GameObjects.Rectangle;
-  private lastWalletSnapshot = '';
 
   // HUD panels
   private healthPanel?: Phaser.GameObjects.Container;
@@ -2642,12 +2641,8 @@ export class GameScene extends Phaser.Scene {
       this.carriedText.setText(`携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`);
     }
 
-    // Update card affordability when wallet changes (throttled)
-    const walletKey = `${Math.floor(this.wallet.wood)}|${Math.floor(this.wallet.stone)}|${Math.floor(this.wallet.gold)}|${this.selectedCardIndex}`;
-    if (walletKey !== this.lastWalletSnapshot) {
-      this.lastWalletSnapshot = walletKey;
-      this.updateCardHand();
-    }
+    // Lightweight card affordability refresh (no destruction)
+    this.refreshCardAffordability();
   }
 
   private destroyHudPanels(): void {
@@ -2666,27 +2661,18 @@ export class GameScene extends Phaser.Scene {
     this.cardHandContainer.setScrollFactor(0);
     this.cardHandContainer.setDepth(OVERLAY_DEPTH + 5);
 
-    // Invisible world click zone for deselecting cards
-    // Covers the world area (below HUD, above card hand)
-    this.worldClickZone = this.add.rectangle(0, 0, 1280, 720, 0x000000, 0);
-    this.worldClickZone.setScrollFactor(0);
-    this.worldClickZone.setDepth(OVERLAY_DEPTH + 3);
-    this.worldClickZone.setInteractive();
-    this.worldClickZone.on('pointerdown', () => {
-      if (this.selectedCardIndex >= 0) {
-        this.deselectCard();
-      }
-    });
-
-    this.updateCardHand();
+    this.rebuildCardHand();
   }
 
-  private updateCardHand(): void {
-    // Destroy old card visuals and stop bounce tweens
-    for (const cv of this.cardVisuals) cv.destroy(true);
-    for (const tw of this.cardBounceTweens) tw.stop();
-    this.cardVisuals = [];
-    this.cardBounceTweens = [];
+  /** Rebuild all card visuals from scratch — call when hand contents change */
+  private rebuildCardHand(): void {
+    // Destroy old card visuals
+    for (const p of this.cardPanels) p.destroy();
+    for (const l of this.cardLabels) l.destroy();
+    for (const c of this.cardCosts) c.destroy();
+    this.cardPanels = [];
+    this.cardLabels = [];
+    this.cardCosts = [];
 
     if (this.cardHand.length === 0) {
       const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
@@ -2705,97 +2691,131 @@ export class GameScene extends Phaser.Scene {
 
     this.cardHand.forEach((type, index) => {
       const x = startX + index * (cardWidth + gap);
-      const isSelected = index === this.selectedCardIndex;
+      this.createCardAt(index, x, type, cardWidth, cardHeight);
+    });
+  }
+
+  private createCardAt(index: number, x: number, type: Exclude<BuildingType, 'wall'>, cardWidth: number, cardHeight: number): void {
+    const isSelected = index === this.selectedCardIndex;
+    const canAffordThis = canBuild(this.wallet, type);
+
+    let bgColor: number;
+    let strokeColor: number;
+    let strokeWidth: number;
+    let strokeAlpha: number;
+    let bgAlpha: number;
+    let labelColor: string;
+    let costColor: string;
+
+    if (isSelected) {
+      bgColor = 0x3a3020;
+      strokeColor = 0xd4a843;
+      strokeWidth = 2;
+      strokeAlpha = 1;
+      bgAlpha = 0.95;
+      labelColor = '#facc15';
+      costColor = '#e0d8c8';
+    } else if (canAffordThis) {
+      bgColor = 0x3a3020;
+      strokeColor = 0x5a4a38;
+      strokeWidth = 1;
+      strokeAlpha = 0.6;
+      bgAlpha = 0.95;
+      labelColor = '#e0d8c8';
+      costColor = '#8a7a68';
+    } else {
+      bgColor = 0x1a1510;
+      strokeColor = 0x3a3528;
+      strokeWidth = 1;
+      strokeAlpha = 0.3;
+      bgAlpha = 0.6;
+      labelColor = '#5a5048';
+      costColor = '#4a4038';
+    }
+
+    const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
+    panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
+
+    if (canAffordThis) {
+      panelBg.setInteractive({ useHandCursor: true });
+      panelBg.on('pointerover', () => {
+        if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x4a4030, 1);
+      });
+      panelBg.on('pointerout', () => {
+        if (index !== this.selectedCardIndex) panelBg.setFillStyle(bgColor, bgAlpha);
+      });
+      panelBg.on('pointerdown', () => this.onCardClicked(index));
+    } else {
+      panelBg.disableInteractive();
+    }
+
+    const def = BUILDING_DEFINITIONS[type];
+    const label = this.add.text(x, -12, `${def.shortLabel} ${def.name}`, {
+      color: labelColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    label.setOrigin(0.5);
+    label.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
+
+    const cost = this.add.text(x, 6, getCatalogCostText(type), {
+      color: costColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+    });
+    cost.setOrigin(0.5);
+    cost.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
+
+    this.cardPanels.push(panelBg);
+    this.cardLabels.push(label);
+    this.cardCosts.push(cost);
+    this.cardHandContainer?.add([panelBg, label, cost]);
+  }
+
+  /** Update affordability colors on existing cards without recreating them */
+  private refreshCardAffordability(): void {
+    if (this.cardHand.length === 0 || this.cardPanels.length === 0) return;
+
+    const cardWidth = 90;
+    const gap = 10;
+    const totalWidth = this.cardHand.length * (cardWidth + gap) - gap;
+    let startX = -totalWidth / 2 + cardWidth / 2;
+
+    this.cardHand.forEach((type, index) => {
+      if (index >= this.cardPanels.length) return;
       const canAffordThis = canBuild(this.wallet, type);
+      const isSelected = index === this.selectedCardIndex;
+      const panelBg = this.cardPanels[index];
+      const label = this.cardLabels[index];
+      const cost = this.cardCosts[index];
 
-      let bgColor: number;
-      let strokeColor: number;
-      let strokeWidth: number;
-      let strokeAlpha: number;
-      let bgAlpha: number;
-      let labelColor: string;
-      let costColor: string;
-
-      if (isSelected) {
-        // Selected: bright gold edge
-        bgColor = 0x3a3020;
-        strokeColor = 0xd4a843;
-        strokeWidth = 2;
-        strokeAlpha = 1;
-        bgAlpha = 0.95;
-        labelColor = '#facc15';
-        costColor = '#e0d8c8';
-      } else if (canAffordThis) {
-        // Affordable: normal warm color with bounce
-        bgColor = 0x3a3020;
-        strokeColor = 0x5a4a38;
-        strokeWidth = 1;
-        strokeAlpha = 0.6;
-        bgAlpha = 0.95;
-        labelColor = '#e0d8c8';
-        costColor = '#8a7a68';
-      } else {
-        // Can't afford: grayed out, disabled
-        bgColor = 0x1a1510;
-        strokeColor = 0x3a3528;
-        strokeWidth = 1;
-        strokeAlpha = 0.3;
-        bgAlpha = 0.6;
-        labelColor = '#5a5048';
-        costColor = '#4a4038';
-      }
-
-      const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
-      panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
-
-      if (canAffordThis) {
+      if (canAffordThis && !isSelected) {
+        panelBg.setFillStyle(0x3a3020, 0.95);
+        panelBg.setStrokeStyle(1, 0x5a4a38, 0.6);
+        label.setAlpha(1);
+        cost.setAlpha(1);
+        label.setColor('#e0d8c8');
+        cost.setColor('#8a7a68');
         panelBg.setInteractive({ useHandCursor: true });
-        panelBg.on('pointerover', () => {
-          if (!isSelected) panelBg.setFillStyle(0x4a4030, 1);
-        });
-        panelBg.on('pointerout', () => {
-          if (!isSelected) panelBg.setFillStyle(bgColor, bgAlpha);
-        });
-        panelBg.on('pointerdown', () => this.onCardClicked(index));
-
-        // Subtle bounce animation for affordable cards
-        const bounce = this.tweens.add({
-          targets: panelBg,
-          scaleY: 1.04,
-          scaleX: 1.02,
-          duration: 600,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-        this.cardBounceTweens.push(bounce);
+      } else if (isSelected) {
+        panelBg.setFillStyle(0x3a3020, 0.95);
+        panelBg.setStrokeStyle(2, 0xd4a843, 1);
+        label.setAlpha(1);
+        cost.setAlpha(1);
+        label.setColor('#facc15');
+        cost.setColor('#e0d8c8');
+        panelBg.disableInteractive();
       } else {
+        panelBg.setFillStyle(0x1a1510, 0.6);
+        panelBg.setStrokeStyle(1, 0x3a3528, 0.3);
+        label.setAlpha(0.5);
+        cost.setAlpha(0.5);
+        label.setColor('#5a5048');
+        cost.setColor('#4a4038');
         panelBg.disableInteractive();
       }
-
-      const def = BUILDING_DEFINITIONS[type];
-      const label = this.add.text(x, -12, `${def.shortLabel} ${def.name}`, {
-        color: labelColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
-      });
-      label.setOrigin(0.5);
-      label.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
-
-      const cost = this.add.text(x, 6, getCatalogCostText(type), {
-        color: costColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
-      });
-      cost.setOrigin(0.5);
-      cost.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
-
-      const card = this.add.container(0, 0);
-      card.add([panelBg, label, cost]);
-      this.cardVisuals.push(card);
-      this.cardHandContainer?.add([panelBg, label, cost]);
     });
   }
 
   private addCardToHand(type: Exclude<BuildingType, 'wall'>): void {
     this.cardHand.push(type);
-    if (this.cardHandContainer) this.updateCardHand();
+    if (this.cardHandContainer) this.rebuildCardHand();
   }
 
   private onCardClicked(index: number): void {
@@ -2817,7 +2837,7 @@ export class GameScene extends Phaser.Scene {
     const def = BUILDING_DEFINITIONS[type];
     this.showFeedback(`点击空地放置 ${def.name}`, '#d4a843');
     this.createBuildSlotHighlights();
-    this.updateCardHand();
+    this.rebuildCardHand();
   }
 
   private deselectCard(): void {
@@ -2825,10 +2845,7 @@ export class GameScene extends Phaser.Scene {
     this.buildMode = false;
     this.destroyBuildSlotHighlights();
     this.hideBuildMenu();
-    // Stop bounce tweens, they'll be recreated on next updateCardHand
-    for (const tw of this.cardBounceTweens) tw.stop();
-    this.cardBounceTweens = [];
-    this.updateCardHand();
+    this.rebuildCardHand();
   }
 
   private placeCard(slot: BuildSlot): void {
