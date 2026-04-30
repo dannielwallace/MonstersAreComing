@@ -17,6 +17,7 @@ import {
   getBuildingDefinition,
   getBuildingCostText as getCatalogCostText,
   spendBuildingCost,
+  canBuild,
   type PlacedBuilding,
 } from '../game/buildings';
 import {
@@ -275,6 +276,9 @@ export class GameScene extends Phaser.Scene {
   private cardVisuals: Phaser.GameObjects.Container[] = [];
   private selectedCardIndex = -1;
   private cardHandContainer?: Phaser.GameObjects.Container;
+  private cardBounceTweens: Phaser.Tweens.Tween[] = [];
+  private worldClickZone?: Phaser.GameObjects.Rectangle;
+  private lastWalletSnapshot = '';
 
   // HUD panels
   private healthPanel?: Phaser.GameObjects.Container;
@@ -2320,23 +2324,34 @@ export class GameScene extends Phaser.Scene {
   private createBuildSlotHighlights(): void {
     const occupiedSlotIds = this.getOccupiedSlotIds();
     for (const slot of GRID_BUILD_SLOTS) {
-      if (occupiedSlotIds.has(slot.id)) continue;
       // When a tower card is selected, don't highlight wall-only slots
       if (this.selectedCardIndex >= 0 && slot.buildingType === 'wall') continue;
       const center = this.getSlotCenter(slot);
-      const highlight = this.add.rectangle(center.x, center.y, 44, 44, 0xffa726, 0.15);
-      highlight.setStrokeStyle(2, 0xffa726, 0.6);
-      highlight.setInteractive({ useHandCursor: true });
-      highlight.on('pointerover', () => highlight.setFillStyle(0xffa726, 0.3));
-      highlight.on('pointerout', () => highlight.setFillStyle(0xffa726, 0.15));
-      highlight.on('pointerdown', () => {
-        if (this.selectedCardIndex >= 0) {
-          this.placeCard(slot);
-        } else {
-          this.showBuildMenu(slot);
-        }
-      });
-      this.buildSlotHighlights.set(slot.id, highlight);
+      const isOccupied = occupiedSlotIds.has(slot.id);
+
+      if (isOccupied) {
+        // Occupied slot: subtle red overlay to show it's blocked
+        const blocked = this.add.rectangle(center.x, center.y, 40, 40, 0xef4444, 0.15);
+        blocked.setStrokeStyle(1, 0xef4444, 0.3);
+        blocked.setDepth(OVERLAY_DEPTH + 4);
+        this.buildSlotHighlights.set(slot.id, blocked);
+      } else {
+        // Free slot: green highlight for building
+        const highlight = this.add.rectangle(center.x, center.y, 44, 44, 0x4caf50, 0.15);
+        highlight.setStrokeStyle(2, 0x4caf50, 0.6);
+        highlight.setDepth(OVERLAY_DEPTH + 8);
+        highlight.setInteractive({ useHandCursor: true });
+        highlight.on('pointerover', () => highlight.setFillStyle(0x4caf50, 0.3));
+        highlight.on('pointerout', () => highlight.setFillStyle(0x4caf50, 0.15));
+        highlight.on('pointerdown', () => {
+          if (this.selectedCardIndex >= 0) {
+            this.placeCard(slot);
+          } else {
+            this.showBuildMenu(slot);
+          }
+        });
+        this.buildSlotHighlights.set(slot.id, highlight);
+      }
     }
   }
 
@@ -2574,6 +2589,13 @@ export class GameScene extends Phaser.Scene {
       this.walletText.setText(`木 ${Math.floor(this.wallet.wood)}  石 ${Math.floor(this.wallet.stone)}  金 ${Math.floor(this.wallet.gold)}`);
       this.carriedText.setText(`携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`);
     }
+
+    // Update card affordability when wallet changes (throttled)
+    const walletKey = `${Math.floor(this.wallet.wood)}|${Math.floor(this.wallet.stone)}|${Math.floor(this.wallet.gold)}|${this.selectedCardIndex}`;
+    if (walletKey !== this.lastWalletSnapshot) {
+      this.lastWalletSnapshot = walletKey;
+      this.updateCardHand();
+    }
   }
 
   private destroyHudPanels(): void {
@@ -2591,20 +2613,34 @@ export class GameScene extends Phaser.Scene {
     this.cardHandContainer = this.add.container(640, 648);
     this.cardHandContainer.setScrollFactor(0);
     this.cardHandContainer.setDepth(OVERLAY_DEPTH + 5);
+
+    // Invisible world click zone for deselecting cards
+    // Covers the world area (below HUD, above card hand)
+    this.worldClickZone = this.add.rectangle(0, 0, 1280, 720, 0x000000, 0);
+    this.worldClickZone.setScrollFactor(0);
+    this.worldClickZone.setDepth(OVERLAY_DEPTH + 3);
+    this.worldClickZone.setInteractive();
+    this.worldClickZone.on('pointerdown', () => {
+      if (this.selectedCardIndex >= 0) {
+        this.deselectCard();
+      }
+    });
+
     this.updateCardHand();
   }
 
   private updateCardHand(): void {
-    // Destroy old card visuals
+    // Destroy old card visuals and stop bounce tweens
     for (const cv of this.cardVisuals) cv.destroy(true);
+    for (const tw of this.cardBounceTweens) tw.stop();
     this.cardVisuals = [];
+    this.cardBounceTweens = [];
 
     if (this.cardHand.length === 0) {
       const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
         color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
       });
       hint.setOrigin(0.5);
-      this.cardVisuals.push(this.add.container(0, 0).add(hint));
       this.cardHandContainer?.add(hint);
       return;
     }
@@ -2618,23 +2654,85 @@ export class GameScene extends Phaser.Scene {
     this.cardHand.forEach((type, index) => {
       const x = startX + index * (cardWidth + gap);
       const isSelected = index === this.selectedCardIndex;
-      const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, 0x2a2018, 0.95);
-      panelBg.setStrokeStyle(isSelected ? 2 : 1, isSelected ? 0xd4a843 : 0x5a4a38, isSelected ? 1 : 0.6);
-      panelBg.setInteractive({ useHandCursor: true });
-      panelBg.on('pointerover', () => { if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x4a4030, 1); });
-      panelBg.on('pointerout', () => { if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x2a2018, 0.95); });
-      panelBg.on('pointerdown', () => this.onCardClicked(index));
+      const canAffordThis = canBuild(this.wallet, type);
+
+      let bgColor: number;
+      let strokeColor: number;
+      let strokeWidth: number;
+      let strokeAlpha: number;
+      let bgAlpha: number;
+      let labelColor: string;
+      let costColor: string;
+
+      if (isSelected) {
+        // Selected: bright gold edge
+        bgColor = 0x3a3020;
+        strokeColor = 0xd4a843;
+        strokeWidth = 2;
+        strokeAlpha = 1;
+        bgAlpha = 0.95;
+        labelColor = '#facc15';
+        costColor = '#e0d8c8';
+      } else if (canAffordThis) {
+        // Affordable: normal warm color with bounce
+        bgColor = 0x3a3020;
+        strokeColor = 0x5a4a38;
+        strokeWidth = 1;
+        strokeAlpha = 0.6;
+        bgAlpha = 0.95;
+        labelColor = '#e0d8c8';
+        costColor = '#8a7a68';
+      } else {
+        // Can't afford: grayed out, disabled
+        bgColor = 0x1a1510;
+        strokeColor = 0x3a3528;
+        strokeWidth = 1;
+        strokeAlpha = 0.3;
+        bgAlpha = 0.6;
+        labelColor = '#5a5048';
+        costColor = '#4a4038';
+      }
+
+      const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
+      panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
+
+      if (canAffordThis) {
+        panelBg.setInteractive({ useHandCursor: true });
+        panelBg.on('pointerover', () => {
+          if (!isSelected) panelBg.setFillStyle(0x4a4030, 1);
+        });
+        panelBg.on('pointerout', () => {
+          if (!isSelected) panelBg.setFillStyle(bgColor, bgAlpha);
+        });
+        panelBg.on('pointerdown', () => this.onCardClicked(index));
+
+        // Subtle bounce animation for affordable cards
+        const bounce = this.tweens.add({
+          targets: panelBg,
+          scaleY: 1.04,
+          scaleX: 1.02,
+          duration: 600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        this.cardBounceTweens.push(bounce);
+      } else {
+        panelBg.disableInteractive();
+      }
 
       const def = BUILDING_DEFINITIONS[type];
       const label = this.add.text(x, -12, `${def.shortLabel} ${def.name}`, {
-        color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+        color: labelColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
       });
       label.setOrigin(0.5);
+      label.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
 
       const cost = this.add.text(x, 6, getCatalogCostText(type), {
-        color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+        color: costColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
       });
       cost.setOrigin(0.5);
+      cost.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
 
       const card = this.add.container(0, 0);
       card.add([panelBg, label, cost]);
@@ -2675,6 +2773,9 @@ export class GameScene extends Phaser.Scene {
     this.buildMode = false;
     this.destroyBuildSlotHighlights();
     this.hideBuildMenu();
+    // Stop bounce tweens, they'll be recreated on next updateCardHand
+    for (const tw of this.cardBounceTweens) tw.stop();
+    this.cardBounceTweens = [];
     this.updateCardHand();
   }
 
