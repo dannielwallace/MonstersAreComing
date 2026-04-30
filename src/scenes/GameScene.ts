@@ -2381,19 +2381,32 @@ export class GameScene extends Phaser.Scene {
       const isOccupied = occupiedSlotIds.has(slot.id);
 
       if (isOccupied) {
-        // Occupied slot: subtle red overlay to show it's blocked
-        const blocked = this.add.rectangle(center.x, center.y, 40, 40, 0xef4444, 0.15);
-        blocked.setStrokeStyle(1, 0xef4444, 0.3);
+        // Occupied slot: red crosshatch to show it's blocked
+        const blocked = this.add.rectangle(center.x, center.y, 46, 46, 0xef4444, 0.2);
+        blocked.setStrokeStyle(2, 0xef4444, 0.7);
         blocked.setDepth(OVERLAY_DEPTH + 4);
         this.buildSlotHighlights.set(slot.id, blocked);
       } else {
-        // Free slot: green highlight for building
-        const highlight = this.add.rectangle(center.x, center.y, 44, 44, 0x4caf50, 0.15);
-        highlight.setStrokeStyle(2, 0x4caf50, 0.6);
+        // Free slot: bright pulsing gold highlight for building
+        const highlight = this.add.rectangle(center.x, center.y, 52, 52, 0xfacc15, 0.3);
+        highlight.setStrokeStyle(3, 0xfacc15, 1);
         highlight.setDepth(OVERLAY_DEPTH + 8);
         highlight.setInteractive({ useHandCursor: true });
-        highlight.on('pointerover', () => highlight.setFillStyle(0x4caf50, 0.3));
-        highlight.on('pointerout', () => highlight.setFillStyle(0x4caf50, 0.15));
+
+        // Pulse animation
+        this.tweens.add({
+          targets: highlight,
+          alpha: 0.5,
+          scaleX: 1.05,
+          scaleY: 1.05,
+          duration: 600,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+
+        highlight.on('pointerover', () => highlight.setFillStyle(0xfacc15, 0.45));
+        highlight.on('pointerout', () => highlight.setFillStyle(0xfacc15, 0.3));
         highlight.on('pointerdown', () => {
           if (this.selectedCardIndex >= 0) {
             this.placeCard(slot);
