@@ -56,7 +56,7 @@ describe('applyUpgrade', () => {
   });
 
   it('increases gather rate for 伐木熟手', () => {
-    expect(applyUpgrade(baseStats, 'gather-rate').gatherRate).toBe(12.5);
+    expect(applyUpgrade(baseStats, 'gather-rate').gatherRate).toBe(62.5);
   });
 
   it('increases max health and current health for 坚固车体', () => {

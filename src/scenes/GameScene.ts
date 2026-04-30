@@ -2321,12 +2321,14 @@ export class GameScene extends Phaser.Scene {
     const occupiedSlotIds = this.getOccupiedSlotIds();
     for (const slot of GRID_BUILD_SLOTS) {
       if (occupiedSlotIds.has(slot.id)) continue;
+      // When a tower card is selected, don't highlight wall-only slots
+      if (this.selectedCardIndex >= 0 && slot.buildingType === 'wall') continue;
       const center = this.getSlotCenter(slot);
-      const highlight = this.add.rectangle(center.x, center.y, 44, 44, 0xffa726, 0.08);
-      highlight.setStrokeStyle(1, 0x8a7a58, 0.4);
+      const highlight = this.add.rectangle(center.x, center.y, 44, 44, 0xffa726, 0.15);
+      highlight.setStrokeStyle(2, 0xffa726, 0.6);
       highlight.setInteractive({ useHandCursor: true });
-      highlight.on('pointerover', () => highlight.setFillStyle(0xffa726, 0.18));
-      highlight.on('pointerout', () => highlight.setFillStyle(0xffa726, 0.08));
+      highlight.on('pointerover', () => highlight.setFillStyle(0xffa726, 0.3));
+      highlight.on('pointerout', () => highlight.setFillStyle(0xffa726, 0.15));
       highlight.on('pointerdown', () => {
         if (this.selectedCardIndex >= 0) {
           this.placeCard(slot);
@@ -2531,10 +2533,10 @@ export class GameScene extends Phaser.Scene {
     this.wavePanel.add(this.xpText);
 
     // Resource panel (top-right)
-    this.resourcePanel = this.add.container(1264, 16);
+    this.resourcePanel = this.add.container(1190, 16);
     this.resourcePanel.setScrollFactor(0);
     this.resourcePanel.setDepth(OVERLAY_DEPTH + 5);
-    this.resourcePanel.add(this.add.rectangle(0, 18, 180, 44, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.resourcePanel.add(this.add.rectangle(0, 18, 170, 44, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
     this.walletText = this.add.text(0, 8, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
     });
@@ -2586,7 +2588,7 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private createCardHand(): void {
-    this.cardHandContainer = this.add.container(640, 670);
+    this.cardHandContainer = this.add.container(640, 648);
     this.cardHandContainer.setScrollFactor(0);
     this.cardHandContainer.setDepth(OVERLAY_DEPTH + 5);
     this.updateCardHand();
@@ -2661,6 +2663,9 @@ export class GameScene extends Phaser.Scene {
 
     this.selectedCardIndex = index;
     this.buildMode = true;
+    const type = this.cardHand[index];
+    const def = BUILDING_DEFINITIONS[type];
+    this.showFeedback(`点击空地放置 ${def.name}`, '#d4a843');
     this.createBuildSlotHighlights();
     this.updateCardHand();
   }
