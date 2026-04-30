@@ -1,11 +1,13 @@
+import {
+  getBuildingCostText as getCatalogCostText,
+  getBuildingDefinition,
+  type BuildingType,
+} from './buildings';
 import type { Point } from './math';
 
-export const CELL_SIZE = 48;
+export type { BuildingType } from './buildings';
 
-/**
- * 建筑类型
- */
-export type BuildingType = 'arrow' | 'catapult' | 'wall';
+export const CELL_SIZE = 48;
 
 /**
  * 网格坐标（相对于行城左上角的格子偏移）
@@ -100,7 +102,7 @@ export function getCaravanCenter(caravanTopLeft: Point): Point {
  */
 export function getSlotByGridCoord(col: number, row: number): BuildSlot | undefined {
   return GRID_BUILD_SLOTS.find(
-    (s) => s.gridOffset.col === col && s.gridOffset.row === row,
+    (slot) => slot.gridOffset.col === col && slot.gridOffset.row === row,
   );
 }
 
@@ -137,26 +139,12 @@ export function isSlotOccupied(
  * 获取建筑类型的中文名称
  */
 export function getBuildingName(type: BuildingType): string {
-  switch (type) {
-    case 'arrow':
-      return '箭塔';
-    case 'catapult':
-      return '投石车';
-    case 'wall':
-      return '城墙';
-  }
+  return getBuildingDefinition(type)?.name ?? type;
 }
 
 /**
  * 获取建筑类型的成本描述
  */
 export function getBuildingCostText(type: BuildingType): string {
-  switch (type) {
-    case 'arrow':
-      return '20 木材';
-    case 'catapult':
-      return '20 木材, 10 石料';
-    case 'wall':
-      return '15 木材';
-  }
+  return getCatalogCostText(type);
 }
