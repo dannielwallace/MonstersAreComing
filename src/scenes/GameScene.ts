@@ -276,6 +276,7 @@ export class GameScene extends Phaser.Scene {
   private cardPanels: Phaser.GameObjects.Rectangle[] = [];  // interactive backgrounds
   private cardLabels: Phaser.GameObjects.Text[] = [];
   private cardCosts: Phaser.GameObjects.Text[] = [];
+  private cardPulseTweens: Phaser.Tweens.Tween[] = [];  // affordability pulse tweens
   private selectedCardIndex = -1;
   private cardHandContainer?: Phaser.GameObjects.Container;
 
@@ -2679,13 +2680,15 @@ export class GameScene extends Phaser.Scene {
 
   /** Rebuild all card visuals from scratch — call when hand contents change */
   private rebuildCardHand(): void {
-    // Destroy old card visuals
+    // Destroy old card visuals and tweens
     for (const p of this.cardPanels) p.destroy();
     for (const l of this.cardLabels) l.destroy();
     for (const c of this.cardCosts) c.destroy();
+    for (const t of this.cardPulseTweens) t.destroy();
     this.cardPanels = [];
     this.cardLabels = [];
     this.cardCosts = [];
+    this.cardPulseTweens = [];
 
     if (this.cardHand.length === 0) {
       const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
@@ -2748,16 +2751,26 @@ export class GameScene extends Phaser.Scene {
 
     const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
     panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
+    panelBg.setData('cardIndex', index);
 
-    if (canAffordThis) {
+    if (canAffordThis && !isSelected) {
       panelBg.setInteractive({ useHandCursor: true });
       panelBg.on('pointerover', () => {
-        if (index !== this.selectedCardIndex) panelBg.setFillStyle(0x4a4030, 1);
+        if (this.selectedCardIndex !== index) panelBg.setFillStyle(0x4a4030, 1);
       });
       panelBg.on('pointerout', () => {
-        if (index !== this.selectedCardIndex) panelBg.setFillStyle(bgColor, bgAlpha);
+        if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
       });
-      panelBg.on('pointerdown', () => this.onCardClicked(index));
+      panelBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event.stopPropagation();
+        this.onCardClicked(panelBg.getData('cardIndex'));
+      });
+    } else if (isSelected) {
+      panelBg.setInteractive({ useHandCursor: true });
+      panelBg.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        pointer.event.stopPropagation();
+        this.deselectCard();
+      });
     } else {
       panelBg.disableInteractive();
     }
@@ -2785,11 +2798,6 @@ export class GameScene extends Phaser.Scene {
   private refreshCardAffordability(): void {
     if (this.cardHand.length === 0 || this.cardPanels.length === 0) return;
 
-    const cardWidth = 90;
-    const gap = 10;
-    const totalWidth = this.cardHand.length * (cardWidth + gap) - gap;
-    let startX = -totalWidth / 2 + cardWidth / 2;
-
     this.cardHand.forEach((type, index) => {
       if (index >= this.cardPanels.length) return;
       const canAffordThis = canBuild(this.wallet, type);
@@ -2800,28 +2808,40 @@ export class GameScene extends Phaser.Scene {
 
       if (canAffordThis && !isSelected) {
         panelBg.setFillStyle(0x3a3020, 0.95);
-        panelBg.setStrokeStyle(1, 0x5a4a38, 0.6);
+        panelBg.setStrokeStyle(2, 0x8a7a58, 0.8);
         label.setAlpha(1);
         cost.setAlpha(1);
         label.setColor('#e0d8c8');
         cost.setColor('#8a7a68');
-        panelBg.setInteractive({ useHandCursor: true });
+        // Kill old pulse and start new color pulse
+        if (this.cardPulseTweens[index]) this.cardPulseTweens[index].destroy();
+        this.cardPulseTweens[index] = this.tweens.add({
+          targets: panelBg,
+          strokeAlpha: 1,
+          fillAlpha: 1,
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
       } else if (isSelected) {
+        // Kill pulse tween
+        if (this.cardPulseTweens[index]) { this.cardPulseTweens[index].destroy(); this.cardPulseTweens[index] = undefined as unknown as Phaser.Tweens.Tween; }
         panelBg.setFillStyle(0x3a3020, 0.95);
         panelBg.setStrokeStyle(2, 0xd4a843, 1);
         label.setAlpha(1);
         cost.setAlpha(1);
         label.setColor('#facc15');
         cost.setColor('#e0d8c8');
-        panelBg.disableInteractive();
       } else {
+        // Kill pulse tween
+        if (this.cardPulseTweens[index]) { this.cardPulseTweens[index].destroy(); this.cardPulseTweens[index] = undefined as unknown as Phaser.Tweens.Tween; }
         panelBg.setFillStyle(0x1a1510, 0.6);
         panelBg.setStrokeStyle(1, 0x3a3528, 0.3);
         label.setAlpha(0.5);
         cost.setAlpha(0.5);
         label.setColor('#5a5048');
         cost.setColor('#4a4038');
-        panelBg.disableInteractive();
       }
     });
   }
