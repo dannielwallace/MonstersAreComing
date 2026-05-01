@@ -2399,8 +2399,6 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({
           targets: highlight,
           alpha: 0.5,
-          scaleX: 1.05,
-          scaleY: 1.05,
           duration: 600,
           yoyo: true,
           repeat: -1,
@@ -2759,6 +2757,7 @@ export class GameScene extends Phaser.Scene {
       if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
     });
     panelBg.on('pointerdown', () => {
+      if (!canBuild(this.wallet, type)) return;
       if (index === this.selectedCardIndex) {
         this.deselectCard();
       } else {
