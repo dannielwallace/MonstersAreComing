@@ -2877,7 +2877,8 @@ export class GameScene extends Phaser.Scene {
     this.wallet = result.wallet;
     this.buildTower(slot, center, type);
 
-    // Card is a recipe — stays in hand after placement, just deselect
+    // Remove the used card
+    this.cardHand.splice(this.selectedCardIndex, 1);
     this.deselectCard();
   }
 
