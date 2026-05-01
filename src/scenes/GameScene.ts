@@ -2383,14 +2383,14 @@ export class GameScene extends Phaser.Scene {
       const isOccupied = occupiedSlotIds.has(slot.id);
 
       if (isOccupied) {
-        // Occupied slot: red crosshatch to show it's blocked
-        const blocked = this.add.rectangle(center.x, center.y, 46, 46, 0xef4444, 0.2);
+        // Occupied slot: subtle red crosshatch to show it's blocked
+        const blocked = this.add.rectangle(center.x, center.y, 40, 40, 0xef4444, 0.2);
         blocked.setStrokeStyle(2, 0xef4444, 0.7);
         blocked.setDepth(OVERLAY_DEPTH + 4);
         this.buildSlotHighlights.set(slot.id, blocked);
       } else {
-        // Free slot: bright pulsing gold highlight for building
-        const highlight = this.add.rectangle(center.x, center.y, 52, 52, 0xfacc15, 0.3);
+        // Free slot: gold highlight for building (fits within one 48px cell)
+        const highlight = this.add.rectangle(center.x, center.y, 40, 40, 0xfacc15, 0.3);
         highlight.setStrokeStyle(3, 0xfacc15, 1);
         highlight.setDepth(OVERLAY_DEPTH + 8);
         highlight.setInteractive({ useHandCursor: true });
@@ -2877,8 +2877,7 @@ export class GameScene extends Phaser.Scene {
     this.wallet = result.wallet;
     this.buildTower(slot, center, type);
 
-    // Remove the used card
-    this.cardHand.splice(this.selectedCardIndex, 1);
+    // Card is a recipe — stays in hand after placement, just deselect
     this.deselectCard();
   }
 
