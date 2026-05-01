@@ -306,6 +306,7 @@ export class GameScene extends Phaser.Scene {
   private bossStarted = false;
   private results: RunResults = createRunResults();
   private eventVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private eventCountdownRings: Map<string, Phaser.GameObjects.Arc> = new Map();
 
   constructor() {
     super('GameScene');
@@ -350,6 +351,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createInitialWoodNodes();
     this.createInitialStoneNodes();
+    this.createInitialRewardCircles();
     this.addCardToHand('arrow');
 
     // Hint text
@@ -486,6 +488,8 @@ export class GameScene extends Phaser.Scene {
     this.results = createRunResults();
     for (const visual of this.eventVisuals.values()) visual.destroy(true);
     this.eventVisuals.clear();
+    for (const ring of this.eventCountdownRings.values()) ring.destroy();
+    this.eventCountdownRings.clear();
   }
 
   // ═══════════════════════════════════════════════════
@@ -1985,16 +1989,24 @@ export class GameScene extends Phaser.Scene {
     this.cleanupMissingMinionVisuals();
   }
 
-  private updateRouteEvents(deltaSeconds: number): void {
-    const progress = this.caravanTopLeft.x;
-    if (this.routeEvents.active.length === 0 && progress > 900) {
-      const event = createRewardCircle(`event-${this.routeEvents.nextId}`, { x: this.caravanTopLeft.x + 260, y: this.caravanTopLeft.y - 120 }, { gold: 12 }, 6);
-      this.routeEvents = { active: [event], nextId: this.routeEvents.nextId + 1 };
+  private createInitialRewardCircles(): void {
+    const circles = [
+      { x: 350, y: 220, reward: { gold: 10 } },
+      { x: 580, y: 480, reward: { gold: 15, wood: 5 } },
+      { x: 820, y: 200, reward: { gold: 12, stone: 5 } },
+    ];
+    for (const c of circles) {
+      const event = createRewardCircle(`reward-${this.routeEvents.nextId++}`, { x: c.x, y: c.y }, c.reward, 1.5);
+      this.routeEvents = { ...this.routeEvents, active: [...this.routeEvents.active, event] };
       this.createEventVisual(event);
     }
+  }
+
+  private updateRouteEvents(deltaSeconds: number): void {
     this.routeEvents = {
       ...this.routeEvents,
       active: this.routeEvents.active.map((event) => {
+        if (event.completed || event.claimed) return event;
         const occupied = distanceSquared(this.playerPosition, event.position) <= 95 ** 2;
         const updated = updateRewardCircle(event, deltaSeconds, occupied);
         const claimed = completeRewardCircle(updated);
@@ -2012,6 +2024,20 @@ export class GameScene extends Phaser.Scene {
       }),
     };
     this.cleanupCompletedEvents();
+    this.updateEventVisuals();
+  }
+
+  private updateEventVisuals(): void {
+    for (const event of this.routeEvents.active) {
+      const ring = this.eventCountdownRings.get(event.id);
+      if (ring) {
+        const progress = 1 - event.remaining / 1.5;
+        const clamped = Math.max(0, Math.min(1, progress));
+        const endAngle = -90 + clamped * 360;
+        ring.setEndAngle(endAngle);
+        ring.setFillStyle(0xd4a843, clamped * 0.5);
+      }
+    }
   }
 
   private createEventVisual(event: RouteEvent): void {
@@ -2020,9 +2046,13 @@ export class GameScene extends Phaser.Scene {
     const circle = this.add.circle(0, 0, 30, 0xd4a843, 0.15);
     circle.setStrokeStyle(2, 0xd4a843, 0.5);
     visual.add(circle);
+    const countdown = this.add.arc(0, 0, 30, -90, -90, false, 0xd4a843, 0);
+    countdown.setDepth(1);
+    visual.add(countdown);
+    this.eventCountdownRings.set(event.id, countdown);
     visual.add(this.add.text(0, 0, '?', {
       color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
-    }).setOrigin(0.5));
+    }).setOrigin(0.5).setDepth(2));
     this.eventVisuals.set(event.id, visual);
   }
 
@@ -2031,6 +2061,8 @@ export class GameScene extends Phaser.Scene {
       if (event.completed && event.claimed) {
         this.eventVisuals.get(event.id)?.destroy(true);
         this.eventVisuals.delete(event.id);
+        this.eventCountdownRings.get(event.id)?.destroy();
+        this.eventCountdownRings.delete(event.id);
       }
     }
     this.routeEvents = {
