@@ -299,6 +299,8 @@ export class GameScene extends Phaser.Scene {
   private xpBarFill?: Phaser.GameObjects.Rectangle;
   private xpText?: Phaser.GameObjects.Text;
   private resourcePanel?: Phaser.GameObjects.Container;
+  private shopButton?: Phaser.GameObjects.Rectangle;
+  private shopLabel?: Phaser.GameObjects.Text;
   private walletText?: Phaser.GameObjects.Text;
   private carriedText?: Phaser.GameObjects.Text;
 
@@ -2003,6 +2005,7 @@ export class GameScene extends Phaser.Scene {
       this.stats.caravanHealth = Math.min(this.stats.caravanMaxHealth, this.stats.caravanHealth + item.repairAmount);
     }
     if (item.kind === 'building' && item.buildingType) {
+      this.addCardToHand(item.buildingType as Exclude<BuildingType, 'wall'>);
       this.showFeedback(`获得建筑：${getBuildingDefinition(item.buildingType)?.name ?? item.buildingType}`, '#d4a843');
     }
     if (item.kind === 'weapon' && item.weaponType) {
@@ -2790,6 +2793,26 @@ export class GameScene extends Phaser.Scene {
     });
     this.carriedText.setOrigin(0.5);
     this.resourcePanel.add(this.carriedText);
+
+    // Shop button (next to resource panel)
+    const shopBtn = this.add.rectangle(1156, 18, 52, 28, 0x3a3020, 1)
+      .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 6).setInteractive({ useHandCursor: true });
+    shopBtn.setStrokeStyle(1, 0x8a7a58, 0.7);
+    shopBtn.on('pointerdown', () => {
+      if (!this.shopOpen && !this.upgradeSelecting && !this.gameOver) {
+        this.nextShopAtSeconds = this.elapsedSeconds;
+        this.maybeOpenShop();
+      } else if (this.shopOpen) {
+        this.closeShop();
+      }
+    });
+    shopBtn.on('pointerover', () => shopBtn.setFillStyle(0x4a4030, 1));
+    shopBtn.on('pointerout', () => shopBtn.setFillStyle(0x3a3020, 1));
+    const shopLabel = this.add.text(1156, 18, '商店', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 6);
+    this.shopButton = shopBtn;
+    this.shopLabel = shopLabel;
   }
 
   private updateHudPanels(): void {
@@ -2826,6 +2849,8 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel?.destroy(true);
     this.wavePanel?.destroy(true);
     this.resourcePanel?.destroy(true);
+    this.shopButton?.destroy();
+    this.shopLabel?.destroy();
     for (const p of this.cardPanels) p.destroy();
     for (const l of this.cardLabels) l.destroy();
     for (const c of this.cardCosts) c.destroy();
