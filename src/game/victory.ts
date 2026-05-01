@@ -5,6 +5,7 @@ export interface GameStats {
   towersBuilt: number;
   woodGathered: number;
   stoneGathered: number;
+  goldGathered: number;
   wallsBuilt: number;
 }
 
@@ -24,5 +25,6 @@ export function formatVictoryStats(stats: GameStats, isVictory: boolean): string
 城墙：${stats.wallsBuilt}
 木材：${Math.floor(stats.woodGathered)}
 石料：${Math.floor(stats.stoneGathered)}
+金矿：${Math.floor(stats.goldGathered)}
 按 R 重新开始`;
 }

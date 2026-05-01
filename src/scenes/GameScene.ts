@@ -162,6 +162,13 @@ interface StoneRenderedNode {
   gatherTimer: number;
 }
 
+interface GoldRenderedNode {
+  node: ResourceNode;
+  shape: Phaser.GameObjects.Container;
+  label: Phaser.GameObjects.Text;
+  gatherTimer: number;
+}
+
 interface Wall {
   id: string;
   slotId: string;
@@ -249,11 +256,13 @@ export class GameScene extends Phaser.Scene {
   private totalEnemiesKilled = 0;
   private totalWoodGathered = 0;
   private totalStoneGathered = 0;
+  private totalGoldGathered = 0;
   private totalWallsBuilt = 0;
   private totalTowersBuilt = 0;
   private resourceSpawner: ResourceSpawnerState = createResourceSpawnerState();
   private woodRenderedNodes: RenderedNode[] = [];
   private stoneRenderedNodes: StoneRenderedNode[] = [];
+  private goldRenderedNodes: GoldRenderedNode[] = [];
   private enemies: Enemy[] = [];
   private towers: Tower[] = [];
   private walls: Wall[] = [];
@@ -351,6 +360,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createInitialWoodNodes();
     this.createInitialStoneNodes();
+    this.createInitialGoldNodes();
     this.createInitialRewardCircles();
     this.addCardToHand('arrow');
 
@@ -455,11 +465,13 @@ export class GameScene extends Phaser.Scene {
     this.totalEnemiesKilled = 0;
     this.totalWoodGathered = 0;
     this.totalStoneGathered = 0;
+    this.totalGoldGathered = 0;
     this.totalWallsBuilt = 0;
     this.totalTowersBuilt = 0;
     this.resourceSpawner = createResourceSpawnerState();
     this.woodRenderedNodes = [];
     this.stoneRenderedNodes = [];
+    this.goldRenderedNodes = [];
     this.enemies = [];
     this.towers = [];
     this.walls = [];
@@ -983,6 +995,14 @@ export class GameScene extends Phaser.Scene {
     for (const node of nodes) this.createStoneNodeVisual(node.x, node.y, node.amount);
   }
 
+  private createInitialGoldNodes(): void {
+    const nodes = [
+      { x: 500, y: 350, amount: 8 },
+      { x: 1000, y: 300, amount: 10 },
+    ];
+    for (const node of nodes) this.createGoldNodeVisual(node.x, node.y, node.amount);
+  }
+
   private createWoodNodeVisual(x: number, y: number, amount: number): RenderedNode {
     const container = this.add.container(x, y);
     container.setDepth(3);
@@ -1048,6 +1068,35 @@ export class GameScene extends Phaser.Scene {
     return rendered;
   }
 
+  private createGoldNodeVisual(x: number, y: number, amount: number): GoldRenderedNode {
+    const container = this.add.container(x, y);
+    container.setDepth(3);
+
+    // 金黄色矿块（相对坐标）
+    const g1 = this.add.rectangle(-3, 4, 16, 12, 0xb8960f);
+    const g2 = this.add.rectangle(5, -1, 14, 14, 0xd4a820);
+    const g3 = this.add.rectangle(1, -9, 10, 10, 0xf0c840);
+    g1.setStrokeStyle(1.5, 0x8a7a10, 0.7);
+    g2.setStrokeStyle(1.5, 0x8a7a10, 0.7);
+    g3.setStrokeStyle(1.5, 0x8a7a10, 0.7);
+    container.add([g1, g2, g3]);
+
+    const label = this.add.text(0, -26, `${amount}`, {
+      color: '#d4a843',
+      fontFamily: 'monospace',
+      fontSize: '11px',
+      fontStyle: 'bold',
+    });
+    label.setOrigin(0.5);
+    label.setDepth(6);
+
+    const node: ResourceNode = { id: `gold-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'gold', radius: 12, color: 0xd4a820 };
+    this.resourceSpawner.goldNodes.push(node);
+    const rendered: GoldRenderedNode = { node, shape: container, label, gatherTimer: 0 };
+    this.goldRenderedNodes.push(rendered);
+    return rendered;
+  }
+
   private updateResourceSpawning(deltaSeconds: number): void {
     const camera = this.cameras.main;
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
@@ -1055,11 +1104,13 @@ export class GameScene extends Phaser.Scene {
 
     for (const node of spawned) {
       if (node.type === 'wood') this.createWoodNodeVisual(node.position.x, node.position.y, node.remaining);
-      else this.createStoneNodeVisual(node.position.x, node.position.y, node.remaining);
+      else if (node.type === 'stone') this.createStoneNodeVisual(node.position.x, node.position.y, node.remaining);
+      else this.createGoldNodeVisual(node.position.x, node.position.y, node.remaining);
     }
 
     this.removeDepletedWoodNodes();
     this.removeDepletedStoneNodes();
+    this.removeDepletedGoldNodes();
   }
 
   private removeDepletedWoodNodes(): void {
@@ -1080,6 +1131,17 @@ export class GameScene extends Phaser.Scene {
         const r = this.stoneRenderedNodes[idx];
         r.shape.destroy(); r.label.destroy();
         this.stoneRenderedNodes.splice(idx, 1);
+      }
+    }
+  }
+
+  private removeDepletedGoldNodes(): void {
+    for (const d of collectDepletedNodes(this.resourceSpawner.goldNodes)) {
+      const idx = this.goldRenderedNodes.findIndex((r) => r.node.id === d.id);
+      if (idx >= 0) {
+        const r = this.goldRenderedNodes[idx];
+        r.shape.destroy(); r.label.destroy();
+        this.goldRenderedNodes.splice(idx, 1);
       }
     }
   }
@@ -1142,6 +1204,33 @@ export class GameScene extends Phaser.Scene {
           const gathered = Math.floor(result.gathered.amount);
           if (gathered > 0) {
             this.showFloatingResource(node.position.x, node.position.y - 20, `+${gathered}石`, '#b0a898');
+          }
+        }
+        rendered.gatherTimer = 0;
+      }
+      rendered.label.setText(`${Math.ceil(Math.max(0, node.remaining))}`);
+      rendered.shape.setAlpha(0.8 + Math.sin(rendered.gatherTimer * 10) * 0.2);
+    }
+
+    for (const rendered of [...this.goldRenderedNodes]) {
+      const { node } = rendered;
+      if (node.remaining <= 0) continue;
+      if (distanceSquared(this.playerPosition, node.position) > GATHER_RANGE * GATHER_RANGE) {
+        rendered.gatherTimer = 0;
+        rendered.shape.setAlpha(1);
+        continue;
+      }
+      rendered.gatherTimer += deltaSeconds;
+      if (rendered.gatherTimer >= 0.5) {
+        const result = harvestNode(node, this.stats.gatherRate * deltaSeconds, 1);
+        node.remaining = result.node.remaining;
+        this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
+        this.totalGoldGathered += result.gathered.amount;
+        if (result.gathered.amount > 0) {
+          gatheredThisFrame = true;
+          const gathered = Math.floor(result.gathered.amount);
+          if (gathered > 0) {
+            this.showFloatingResource(node.position.x, node.position.y - 20, `+${gathered}金`, '#d4a843');
           }
         }
         rendered.gatherTimer = 0;
@@ -1990,16 +2079,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createInitialRewardCircles(): void {
-    const circles = [
-      { x: 350, y: 220, reward: { gold: 10 } },
-      { x: 580, y: 480, reward: { gold: 15, wood: 5 } },
-      { x: 820, y: 200, reward: { gold: 12, stone: 5 } },
-    ];
-    for (const c of circles) {
-      const event = createRewardCircle(`reward-${this.routeEvents.nextId++}`, { x: c.x, y: c.y }, c.reward, 1.5);
-      this.routeEvents = { ...this.routeEvents, active: [...this.routeEvents.active, event] };
-      this.createEventVisual(event);
-    }
+    const event = createRewardCircle(`reward-${this.routeEvents.nextId++}`, { x: 600, y: 400 }, {}, 1.5);
+    this.routeEvents = { ...this.routeEvents, active: [...this.routeEvents.active, event] };
+    this.createEventVisual(event);
   }
 
   private updateRouteEvents(deltaSeconds: number): void {
@@ -2019,6 +2101,21 @@ export class GameScene extends Phaser.Scene {
             xp: this.wallet.xp + (claimed.reward.xp ?? 0),
           };
           this.showFeedback('奖励完成', '#d4a843');
+        }
+        if (updated.completed && !claimed.event.claimed) {
+          const [upgrade] = pickUpgradeChoices(UPGRADE_POOL, 1, Math.random);
+          this.stats = applyUpgrade(this.stats, upgrade.id);
+          const cardMap: Partial<Record<UpgradeId, Exclude<BuildingType, 'wall'>>> = {
+            'building-card-arrow': 'arrow',
+            'building-card-fire': 'fire',
+            'building-card-ice': 'ice',
+            'building-card-catapult': 'catapult',
+          };
+          const cardType = cardMap[upgrade.id as UpgradeId];
+          if (cardType) this.addCardToHand(cardType);
+          this.updateTowerRangeVisuals();
+          this.updateHudPanels();
+          this.showFeedback(`盲盒开启：${upgrade.name}`, '#d4a843');
         }
         return claimed.event;
       }),
@@ -2927,6 +3024,7 @@ export class GameScene extends Phaser.Scene {
       wavesSurvived: this.waveState.currentWave, timeElapsed: this.elapsedSeconds,
       enemiesKilled: this.totalEnemiesKilled, towersBuilt: this.totalTowersBuilt,
       woodGathered: this.totalWoodGathered, stoneGathered: this.totalStoneGathered,
+      goldGathered: this.totalGoldGathered,
       wallsBuilt: this.totalWallsBuilt,
     };
     const dpsRows = formatBuildingDpsRows(this.results, this.elapsedSeconds).slice(0, 6).join('\n');
@@ -2947,6 +3045,7 @@ export class GameScene extends Phaser.Scene {
       wavesSurvived: this.waveState.currentWave, timeElapsed: this.elapsedSeconds,
       enemiesKilled: this.totalEnemiesKilled, towersBuilt: this.totalTowersBuilt,
       woodGathered: this.totalWoodGathered, stoneGathered: this.totalStoneGathered,
+      goldGathered: this.totalGoldGathered,
       wallsBuilt: this.totalWallsBuilt,
     };
     const dpsRows = formatBuildingDpsRows(this.results, this.elapsedSeconds).slice(0, 6).join('\n');

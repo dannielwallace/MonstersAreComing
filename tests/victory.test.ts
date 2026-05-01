@@ -8,6 +8,7 @@ const sampleStats: GameStats = {
   towersBuilt: 5,
   woodGathered: 120,
   stoneGathered: 60,
+  goldGathered: 25,
   wallsBuilt: 2,
 };
 

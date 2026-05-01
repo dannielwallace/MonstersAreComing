@@ -12,7 +12,7 @@ export interface ResourceNode {
   position: Point;
   remaining: number;
   maxAmount: number;
-  type: 'wood' | 'stone';
+  type: 'wood' | 'stone' | 'gold';
   // 视觉属性
   radius: number;
   color: number;
@@ -21,12 +21,14 @@ export interface ResourceNode {
 export interface ResourceSpawnerState {
   woodNodes: ResourceNode[];
   stoneNodes: ResourceNode[];
+  goldNodes: ResourceNode[];
   nextId: number;
   lastSpawnX: number; // 上次生成资源的最右 X 坐标
 }
 
 const WOOD_SPAWN_INTERVAL = 180; // 每多少 px 生成一批木材
 const STONE_SPAWN_INTERVAL = 280; // 每多少 px 生成一批石料
+const GOLD_SPAWN_INTERVAL = 500; // 每多少 px 生成一批金矿
 const SPAWN_AHEAD_MARGIN = 1200; // 在行城前方多远生成
 const CLEANUP_BEHIND_MARGIN = 600; // 在行城后方多远清理
 
@@ -34,6 +36,8 @@ const WOOD_AMOUNT_MIN = 15;
 const WOOD_AMOUNT_MAX = 30;
 const STONE_AMOUNT_MIN = 10;
 const STONE_AMOUNT_MAX = 25;
+const GOLD_AMOUNT_MIN = 6;
+const GOLD_AMOUNT_MAX = 12;
 
 function randomBetween(min: number, max: number, rng: () => number): number {
   return min + rng() * (max - min);
@@ -43,6 +47,7 @@ export function createResourceSpawnerState(initialX = 0): ResourceSpawnerState {
   return {
     woodNodes: [],
     stoneNodes: [],
+    goldNodes: [],
     nextId: 0,
     lastSpawnX: initialX,
   };
@@ -102,6 +107,24 @@ export function updateResourceSpawner(
       state.stoneNodes.push(stoneNode);
       spawned.push(stoneNode);
     }
+
+    // 每隔一段距离概率生成金矿
+    if (state.nextId % 3 === 0 && rng() < 0.45) {
+      const goldSpawnX = state.lastSpawnX + Math.round(GOLD_SPAWN_INTERVAL / 2);
+      const goldAmount = Math.round(randomBetween(GOLD_AMOUNT_MIN, GOLD_AMOUNT_MAX, rng));
+      const goldY = randomBetween(80, sceneHeight - 80, rng);
+      const goldNode: ResourceNode = {
+        id: `gold-${state.nextId++}`,
+        position: { x: goldSpawnX, y: goldY },
+        remaining: goldAmount,
+        maxAmount: goldAmount,
+        type: 'gold',
+        radius: 12,
+        color: 0xd4a820,
+      };
+      state.goldNodes.push(goldNode);
+      spawned.push(goldNode);
+    }
   }
 
   // 清理超过相机后方视野的资源
@@ -114,6 +137,13 @@ export function updateResourceSpawner(
     return true;
   });
   state.stoneNodes = state.stoneNodes.filter((node) => {
+    if (node.position.x < cleanupX && node.remaining <= 0) {
+      cleanedUp.push(node.id);
+      return false;
+    }
+    return true;
+  });
+  state.goldNodes = state.goldNodes.filter((node) => {
     if (node.position.x < cleanupX && node.remaining <= 0) {
       cleanedUp.push(node.id);
       return false;
