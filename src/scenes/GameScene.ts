@@ -277,7 +277,6 @@ export class GameScene extends Phaser.Scene {
   private cardLabels: Phaser.GameObjects.Text[] = [];
   private cardCosts: Phaser.GameObjects.Text[] = [];
   private selectedCardIndex = -1;
-  private cardHandContainer?: Phaser.GameObjects.Container;
 
   // HUD panels
   private healthPanel?: Phaser.GameObjects.Container;
@@ -352,8 +351,6 @@ export class GameScene extends Phaser.Scene {
     this.createInitialWoodNodes();
     this.createInitialStoneNodes();
     this.addCardToHand('arrow');
-    this.updateHudPanels();
-    this.createCardHand();
 
     // Hint text
     const hint = this.add.text(640, 690, 'WASD: 移动 | SPACE: 攻击 | 点击建筑卡片建造 | P: 暂停', {
@@ -2667,22 +2664,15 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel?.destroy(true);
     this.wavePanel?.destroy(true);
     this.resourcePanel?.destroy(true);
-    this.cardHandContainer?.destroy(true);
+    for (const p of this.cardPanels) p.destroy();
+    for (const l of this.cardLabels) l.destroy();
+    for (const c of this.cardCosts) c.destroy();
   }
 
   // ═══════════════════════════════════════════════════
   // CARD HAND
   // ═══════════════════════════════════════════════════
 
-  private createCardHand(): void {
-    this.cardHandContainer = this.add.container(640, 648);
-    this.cardHandContainer.setScrollFactor(0);
-    this.cardHandContainer.setDepth(OVERLAY_DEPTH + 5);
-
-    this.rebuildCardHand();
-  }
-
-  /** Rebuild all card visuals from scratch — call when hand contents change */
   private rebuildCardHand(): void {
     // Destroy old card visuals
     for (const p of this.cardPanels) p.destroy();
@@ -2693,11 +2683,13 @@ export class GameScene extends Phaser.Scene {
     this.cardCosts = [];
 
     if (this.cardHand.length === 0) {
-      const hint = this.add.text(0, 0, '获得建筑卡以开始建造', {
+      const hint = this.add.text(640, 648, '获得建筑卡以开始建造', {
         color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
       });
       hint.setOrigin(0.5);
-      this.cardHandContainer?.add(hint);
+      hint.setScrollFactor(0);
+      hint.setDepth(OVERLAY_DEPTH + 5);
+      this.cardLabels.push(hint); // track for cleanup
       return;
     }
 
@@ -2705,15 +2697,15 @@ export class GameScene extends Phaser.Scene {
     const cardHeight = 56;
     const gap = 10;
     const totalWidth = this.cardHand.length * (cardWidth + gap) - gap;
-    let startX = -totalWidth / 2 + cardWidth / 2;
+    const startX = 640 - totalWidth / 2;
 
     this.cardHand.forEach((type, index) => {
       const x = startX + index * (cardWidth + gap);
-      this.createCardAt(index, x, type, cardWidth, cardHeight);
+      this.createCardAt(index, x, 648, type, cardWidth, cardHeight);
     });
   }
 
-  private createCardAt(index: number, x: number, type: Exclude<BuildingType, 'wall'>, cardWidth: number, cardHeight: number): void {
+  private createCardAt(index: number, x: number, y: number, type: Exclude<BuildingType, 'wall'>, cardWidth: number, cardHeight: number): void {
     const isSelected = index === this.selectedCardIndex;
     const canAffordThis = canBuild(this.wallet, type);
 
@@ -2751,12 +2743,14 @@ export class GameScene extends Phaser.Scene {
       costColor = '#4a4038';
     }
 
-    const panelBg = this.add.rectangle(x, 0, cardWidth, cardHeight, bgColor, bgAlpha);
+    const panelBg = this.add.rectangle(x, y, cardWidth, cardHeight, bgColor, bgAlpha);
     panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
     panelBg.setData('cardIndex', index);
     panelBg.setData('cardType', type);
+    panelBg.setScrollFactor(0);
+    panelBg.setDepth(OVERLAY_DEPTH + 5);
 
-    // ALWAYS interactive — pointerdown handler checks affordability
+    // Interactive — placed directly in scene, not in container
     panelBg.setInteractive({ useHandCursor: true });
     panelBg.on('pointerover', () => {
       if (this.selectedCardIndex !== index) panelBg.setFillStyle(0x4a4030, 1);
@@ -2786,22 +2780,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     const def = BUILDING_DEFINITIONS[type];
-    const label = this.add.text(x, -12, `${def.shortLabel} ${def.name}`, {
+    const label = this.add.text(x, y - 12, `${def.shortLabel} ${def.name}`, {
       color: labelColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     label.setOrigin(0.5);
     label.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
+    label.setScrollFactor(0);
+    label.setDepth(OVERLAY_DEPTH + 5);
 
-    const cost = this.add.text(x, 6, getCatalogCostText(type), {
+    const cost = this.add.text(x, y + 6, getCatalogCostText(type), {
       color: costColor, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
     });
     cost.setOrigin(0.5);
     cost.setAlpha(isSelected ? 1 : canAffordThis ? 1 : 0.5);
+    cost.setScrollFactor(0);
+    cost.setDepth(OVERLAY_DEPTH + 5);
 
     this.cardPanels.push(panelBg);
     this.cardLabels.push(label);
     this.cardCosts.push(cost);
-    this.cardHandContainer?.add([panelBg, label, cost]);
   }
 
   /** Update affordability colors on existing cards without recreating them */
@@ -2843,7 +2840,7 @@ export class GameScene extends Phaser.Scene {
 
   private addCardToHand(type: Exclude<BuildingType, 'wall'>): void {
     this.cardHand.push(type);
-    if (this.cardHandContainer) this.rebuildCardHand();
+    this.rebuildCardHand();
   }
 
   private selectCard(index: number): void {
