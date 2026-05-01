@@ -219,7 +219,7 @@ interface FloatingText {
   timer: number;
 }
 
-type GameKey = 'W' | 'A' | 'S' | 'D' | 'B' | 'R' | 'ONE' | 'TWO' | 'THREE' | 'SPACE' | 'ESCAPE' | 'P';
+type GameKey = 'W' | 'A' | 'S' | 'D' | 'B' | 'R' | 'ONE' | 'TWO' | 'THREE' | 'SPACE' | 'ESCAPE' | 'P' | 'NINE';
 
 export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -305,6 +305,8 @@ export class GameScene extends Phaser.Scene {
   // P1 systems
   private shop?: ShopState;
   private shopOverlay?: Phaser.GameObjects.Container;
+  private shopOverlayButtons: Phaser.GameObjects.Rectangle[] = [];
+  private shopOverlayTexts: Phaser.GameObjects.Text[] = [];
   private shopOpen = false;
   private nextShopAtSeconds = 180;
   private weapons: WeaponState = createWeaponState();
@@ -356,6 +358,7 @@ export class GameScene extends Phaser.Scene {
       SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE,
       ESCAPE: Phaser.Input.Keyboard.KeyCodes.ESC,
       P: Phaser.Input.Keyboard.KeyCodes.P,
+      NINE: Phaser.Input.Keyboard.KeyCodes.NINE,
     }) as Record<GameKey, Phaser.Input.Keyboard.Key>;
 
     this.createInitialWoodNodes();
@@ -377,6 +380,12 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, deltaMs: number): void {
     const deltaSeconds = deltaMs / 1000;
+
+    // Dev shortcut: press 9 to open shop
+    if (!this.shopOpen && !this.upgradeSelecting && !this.gameOver && Phaser.Input.Keyboard.JustDown(this.keys.NINE)) {
+      this.nextShopAtSeconds = this.elapsedSeconds;
+      this.maybeOpenShop();
+    }
 
     // Pause toggle (ESC only if no card selected, P always works)
     if (!this.gameOver && Phaser.Input.Keyboard.JustDown(this.keys.P)) {
@@ -1907,26 +1916,46 @@ export class GameScene extends Phaser.Scene {
     overlay.add(this.add.text(0, -170, '商店', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '30px', fontStyle: 'bold',
     }).setOrigin(0.5));
+
+    // Shop buttons placed directly in scene (Container children can't receive pointer events)
+    const shopButtons: Phaser.GameObjects.Rectangle[] = [];
+    const shopTexts: Phaser.GameObjects.Text[] = [];
     this.shop.stock.forEach((item, index) => {
-      const y = -90 + index * 58;
-      const button = this.add.rectangle(0, y, 560, 44, 0x3a3020, 1).setInteractive({ useHandCursor: true });
+      const y = 270 + index * 58;
+      const button = this.add.rectangle(640, y, 560, 44, 0x3a3020, 1)
+        .setScrollFactor(0)
+        .setDepth(OVERLAY_DEPTH + 23)
+        .setInteractive({ useHandCursor: true });
       button.on('pointerdown', () => this.buyShopItem(item.id));
-      overlay.add(button);
-      overlay.add(this.add.text(-250, y, item.name, { color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px' }).setOrigin(0, 0.5));
-      overlay.add(this.add.text(250, y, this.formatCost(item.cost), { color: '#c8a860', fontFamily: 'monospace', fontSize: '13px' }).setOrigin(1, 0.5));
+      shopButtons.push(button);
+      shopTexts.push(this.add.text(390, y, item.name, { color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px' }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
+      shopTexts.push(this.add.text(890, y, this.formatCost(item.cost), { color: '#c8a860', fontFamily: 'monospace', fontSize: '13px' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
     });
-    const reroll = this.add.rectangle(-120, 165, 160, 38, 0x3a3020, 1).setInteractive({ useHandCursor: true });
-    reroll.on('pointerdown', () => this.rerollCurrentShop());
-    const close = this.add.rectangle(120, 165, 160, 38, 0x3a3020, 1).setInteractive({ useHandCursor: true });
-    close.on('pointerdown', () => this.closeShop());
-    overlay.add([reroll, close]);
-    overlay.add(this.add.text(-120, 165, `重随 ${this.shop.rerollCost} 金`, { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5));
-    overlay.add(this.add.text(120, 165, '离开', { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5));
+
+    const rerollBtn = this.add.rectangle(520, 525, 160, 38, 0x3a3020, 1)
+      .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23).setInteractive({ useHandCursor: true });
+    rerollBtn.on('pointerdown', () => this.rerollCurrentShop());
+    shopButtons.push(rerollBtn);
+
+    const closeBtn = this.add.rectangle(760, 525, 160, 38, 0x3a3020, 1)
+      .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23).setInteractive({ useHandCursor: true });
+    closeBtn.on('pointerdown', () => this.closeShop());
+    shopButtons.push(closeBtn);
+
+    shopTexts.push(this.add.text(520, 525, `重随 ${this.shop.rerollCost} 金`, { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
+    shopTexts.push(this.add.text(760, 525, '离开', { color: '#e0d8c8', fontFamily: 'Arial', fontSize: '14px' }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
+
     this.shopOverlay = overlay;
+    this.shopOverlayButtons = shopButtons;
+    this.shopOverlayTexts = shopTexts;
   }
 
   private hideShopOverlay(): void {
     if (this.shopOverlay) { this.shopOverlay.destroy(true); this.shopOverlay = undefined; }
+    for (const b of this.shopOverlayButtons) b.destroy();
+    this.shopOverlayButtons = [];
+    for (const t of this.shopOverlayTexts) t.destroy();
+    this.shopOverlayTexts = [];
   }
 
   private buyShopItem(itemId: string): void {
