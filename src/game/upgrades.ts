@@ -54,7 +54,7 @@ export const DEFAULT_RUN_STATS: RunStats = {
   towerRange: 190,
   towerDamage: 10,
   towerFireInterval: 0.55,
-  gatherRate: 50,
+  gatherRate: 500,
   caravanMaxHealth: 500,
   caravanHealth: 500,
   wallMaxHealth: 80,

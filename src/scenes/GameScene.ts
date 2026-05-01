@@ -1104,8 +1104,11 @@ export class GameScene extends Phaser.Scene {
         this.totalWoodGathered += result.gathered.amount;
         if (result.gathered.amount > 0) {
           gatheredThisFrame = true;
-          const label = result.gathered.type === 'wood' ? '木' : result.gathered.type === 'stone' ? '石' : '金';
-          this.showFloatingResource(node.position.x, node.position.y - 20, `+${Math.floor(result.gathered.amount)}${label}`, '#c0d8a0');
+          const gathered = Math.floor(result.gathered.amount);
+          if (gathered > 0) {
+            const label = result.gathered.type === 'wood' ? '木' : result.gathered.type === 'stone' ? '石' : '金';
+            this.showFloatingResource(node.position.x, node.position.y - 20, `+${gathered}${label}`, '#c0d8a0');
+          }
         }
         rendered.gatherTimer = 0;
       }
@@ -1132,7 +1135,10 @@ export class GameScene extends Phaser.Scene {
         this.totalStoneGathered += result.gathered.amount;
         if (result.gathered.amount > 0) {
           gatheredThisFrame = true;
-          this.showFloatingResource(node.position.x, node.position.y - 20, `+${Math.floor(result.gathered.amount)}石`, '#b0a898');
+          const gathered = Math.floor(result.gathered.amount);
+          if (gathered > 0) {
+            this.showFloatingResource(node.position.x, node.position.y - 20, `+${gathered}石`, '#b0a898');
+          }
         }
         rendered.gatherTimer = 0;
       }
