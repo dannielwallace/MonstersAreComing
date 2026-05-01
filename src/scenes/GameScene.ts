@@ -2123,18 +2123,10 @@ export class GameScene extends Phaser.Scene {
         if (event.completed || event.claimed) return event;
         const occupied = distanceSquared(this.playerPosition, event.position) <= 95 ** 2;
         const updated = updateRewardCircle(event, deltaSeconds, occupied);
-        const claimed = completeRewardCircle(updated);
-        if (Object.keys(claimed.reward).length > 0) {
-          this.wallet = {
-            ...this.wallet,
-            gold: this.wallet.gold + (claimed.reward.gold ?? 0),
-            wood: this.wallet.wood + (claimed.reward.wood ?? 0),
-            stone: this.wallet.stone + (claimed.reward.stone ?? 0),
-            xp: this.wallet.xp + (claimed.reward.xp ?? 0),
-          };
-          this.showFeedback('奖励完成', '#d4a843');
-        }
-        if (updated.completed && !claimed.event.claimed) {
+        const justCompleted = !event.completed && updated.completed;
+
+        // Blind box: random upgrade on completion
+        if (justCompleted) {
           const [upgrade] = pickUpgradeChoices(UPGRADE_POOL, 1, Math.random);
           this.stats = applyUpgrade(this.stats, upgrade.id);
           const cardMap: Partial<Record<UpgradeId, Exclude<BuildingType, 'wall'>>> = {
@@ -2148,6 +2140,18 @@ export class GameScene extends Phaser.Scene {
           this.updateTowerRangeVisuals();
           this.updateHudPanels();
           this.showFeedback(`盲盒开启：${upgrade.name}`, '#d4a843');
+        }
+
+        // Resource reward (legacy, currently reward is empty)
+        const claimed = completeRewardCircle(updated);
+        if (Object.keys(claimed.reward).length > 0) {
+          this.wallet = {
+            ...this.wallet,
+            gold: this.wallet.gold + (claimed.reward.gold ?? 0),
+            wood: this.wallet.wood + (claimed.reward.wood ?? 0),
+            stone: this.wallet.stone + (claimed.reward.stone ?? 0),
+            xp: this.wallet.xp + (claimed.reward.xp ?? 0),
+          };
         }
         return claimed.event;
       }),
@@ -2794,8 +2798,8 @@ export class GameScene extends Phaser.Scene {
     this.carriedText.setOrigin(0.5);
     this.resourcePanel.add(this.carriedText);
 
-    // Shop button (next to resource panel)
-    const shopBtn = this.add.rectangle(1156, 18, 52, 28, 0x3a3020, 1)
+    // Shop button (left of resource panel)
+    const shopBtn = this.add.rectangle(1072, 18, 52, 28, 0x3a3020, 1)
       .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 6).setInteractive({ useHandCursor: true });
     shopBtn.setStrokeStyle(1, 0x8a7a58, 0.7);
     shopBtn.on('pointerdown', () => {
@@ -2808,7 +2812,7 @@ export class GameScene extends Phaser.Scene {
     });
     shopBtn.on('pointerover', () => shopBtn.setFillStyle(0x4a4030, 1));
     shopBtn.on('pointerout', () => shopBtn.setFillStyle(0x3a3020, 1));
-    const shopLabel = this.add.text(1156, 18, '商店', {
+    const shopLabel = this.add.text(1072, 18, '商店', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 6);
     this.shopButton = shopBtn;
