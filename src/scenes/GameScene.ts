@@ -460,7 +460,6 @@ export class GameScene extends Phaser.Scene {
 
     this.elapsedSeconds += deltaSeconds;
     this.updatePlayer(deltaSeconds);
-    this.updateCaravan(deltaSeconds);
     this.updateResourceSpawning(deltaSeconds);
     this.updateGathering(deltaSeconds);
     this.updateResourceDeposit();
@@ -472,8 +471,10 @@ export class GameScene extends Phaser.Scene {
     this.updateRouteEvents(deltaSeconds);
     this.updateBoss(deltaSeconds);
     this.updateMinions(deltaSeconds);
-    this.updateEnemies(deltaSeconds);
     this.updateTowers(deltaSeconds);
+    this.updateEnemies(deltaSeconds);
+    // Caravan movement check runs AFTER combat so killed enemies don't block
+    this.updateCaravan(deltaSeconds);
     this.updateCamera();
     this.updateFloatingTexts(deltaSeconds);
     this.updateFeedback(deltaSeconds);
