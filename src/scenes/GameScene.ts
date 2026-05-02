@@ -2914,25 +2914,38 @@ export class GameScene extends Phaser.Scene {
   private updateCaravan(deltaSeconds: number): void {
     // ── Obstacle check: stop if something is in front of the caravan ──
     const caravanHalf = (CARAVAN_GRID_SIZE * CELL_SIZE) / 2; // 48
-    const caravanFront = this.caravanTopLeft.x + caravanHalf * 2; // right edge
+    const caravanBaseFront = this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE; // x=268
     const caravanCenterY = this.caravanTopLeft.y + caravanHalf;
 
-    // Check enemies — use actual position, not slot positions
+    // Calculate effective front: if a tower/wall is on the right-side slots (col=2),
+    // the front extends to the tower's edge instead of the caravan body edge
+    const occupiedSlotIds = this.getOccupiedSlotIds();
+    let caravanFront = caravanBaseFront;
+    const forwardSlotCols = 2; // slots on the right edge of the caravan
+    for (const slot of GRID_BUILD_SLOTS) {
+      if (slot.gridOffset.col === forwardSlotCols && occupiedSlotIds.has(slot.id)) {
+        // Tower/wall extends the front to its right edge
+        const slotRight = this.caravanTopLeft.x + (slot.gridOffset.col + 1) * CELL_SIZE;
+        if (slotRight > caravanFront) caravanFront = slotRight;
+      }
+    }
+
+    // Check enemies — use effective front (caravan or forward buildings)
     let blocked = false;
     for (const enemy of this.enemies) {
       const enemyLeft = enemy.position.x - enemy.radius;
-      if (enemyLeft < caravanFront && enemyLeft > caravanFront - caravanHalf - 5
-          && Math.abs(enemy.position.y - caravanCenterY) < caravanHalf + enemy.radius) {
+      if (enemyLeft < caravanFront && enemyLeft > caravanFront - 60
+          && Math.abs(enemy.position.y - caravanCenterY) < caravanHalf + CELL_SIZE + enemy.radius) {
         blocked = true;
         break;
       }
     }
 
-    // Check resource nodes — only block when node's bounding box reaches caravan body
+    // Check resource nodes — only block when node's bounding box reaches caravan/building
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
         if (node.remaining <= 0) continue;
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf + CELL_SIZE)) {
           blocked = true;
           break;
         }
@@ -2941,7 +2954,7 @@ export class GameScene extends Phaser.Scene {
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
         if (node.remaining <= 0) continue;
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf + CELL_SIZE)) {
           blocked = true;
           break;
         }
@@ -2950,7 +2963,7 @@ export class GameScene extends Phaser.Scene {
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
         if (node.remaining <= 0) continue;
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf + CELL_SIZE)) {
           blocked = true;
           break;
         }
