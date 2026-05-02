@@ -157,8 +157,6 @@ const ENEMY_SEPARATION_DIST = 18;
 const TOWER_BLOCK_RANGE = 20;
 /** Threshold for obstacle in front of caravan to block movement (from caravan front edge) */
 const CARAVAN_OBSTACLE_THRESHOLD = 20;
-/** Damage dealt by caravan per second to blocking obstacles */
-const CARAVAN_CRUSH_DAMAGE = 15;
 const SCREEN_SHAKE_INTENSITY = 0.004;
 const SCREEN_SHAKE_DURATION = 120;
 
@@ -2932,12 +2930,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (blockingEnemy) {
-      // Caravan is blocked — attack the obstacle
-      blockingEnemy.health -= CARAVAN_CRUSH_DAMAGE * deltaSeconds;
-      blockingEnemy.hitFlashTimer = 0.1;
-      if (blockingEnemy.health <= 0) {
-        this.removeEnemy(blockingEnemy);
-      }
+      // Caravan is blocked — stay stopped, enemy will attack caravan from range
     } else {
       // Not blocked — move forward
       this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
