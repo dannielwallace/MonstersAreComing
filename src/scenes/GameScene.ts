@@ -2325,33 +2325,29 @@ export class GameScene extends Phaser.Scene {
     title.setOrigin(0.5);
     overlay.add(title);
 
+    // Upgrade cards placed directly in scene (Container children can't receive pointer events)
     this.upgradeChoices.forEach((choice, index) => {
-      const y = -50 + index * 100;
-      const card = this.add.rectangle(0, y, 600, 76, 0x3a3020, 1);
+      const y = 310 + index * 100;
+      const card = this.add.rectangle(640, y, 600, 76, 0x3a3020, 1)
+        .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21)
+        .setInteractive({ useHandCursor: true });
       card.setStrokeStyle(1, 0x5a4a38, 0.6);
-      card.setInteractive({ useHandCursor: true });
       card.on('pointerover', () => { card.setStrokeStyle(2, 0x8a7a58, 1); card.setFillStyle(0x4a4030, 1); });
       card.on('pointerout', () => { card.setStrokeStyle(1, 0x5a4a38, 0.6); card.setFillStyle(0x3a3020, 1); });
       card.on('pointerdown', () => { if (this.upgradeInputCooldown <= 0) this.selectUpgrade(index); });
 
-      const icon = this.add.text(-270, y, `${index + 1}`, {
+      const icon = this.add.text(370, y, `${index + 1}`, {
         color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
-      });
-      icon.setOrigin(0, 0.5);
-      overlay.add([card, icon]);
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
-      const name = this.add.text(-240, y - 14, choice.name, {
+      const name = this.add.text(400, y - 14, choice.name, {
         color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '20px',
-      });
-      name.setOrigin(0, 0.5);
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
-      const desc = this.add.text(-240, y + 14, choice.description, {
+      const desc = this.add.text(400, y + 14, choice.description, {
         color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px',
         wordWrap: { width: 520 },
-      });
-      desc.setOrigin(0, 0.5);
-
-      overlay.add([card, name, desc]);
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
     });
 
     this.upgradeOverlay = overlay;
