@@ -2860,16 +2860,16 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel.add(this.healthBgRect);
 
     // ═══ 行城 (label + bar same row) ═══
-    this.healthLabel = this.add.text(8, 16, '行城', {
+    this.healthLabel = this.add.text(16, 16, '行城', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(122, 16, 130, 8, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(130, 16, 120, 10, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(42, 16, 126, 6, 0x4caf50);
-    this.healthBar.setOrigin(0, 0.5);
+    this.healthBar = this.add.rectangle(130, 16, 116, 6, 0x4caf50);
+    this.healthBar.setOrigin(0.5, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(122, 16, '', {
+    this.healthText = this.add.text(130, 16, '', {
       color: '#ffffff', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthText.setOrigin(0.5);
@@ -2986,7 +2986,7 @@ export class GameScene extends Phaser.Scene {
       const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
       const hpColor = hpRatio > 0.5 ? 0x4caf50 : hpRatio > 0.25 ? 0xfdd835 : 0xef4444;
       this.healthBar.setFillStyle(hpColor);
-      this.healthBar.setSize(Math.max(0, 126 * hpRatio), 6);
+      this.healthBar.setSize(Math.max(0, 116 * hpRatio), 6);
       this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
     }
 
