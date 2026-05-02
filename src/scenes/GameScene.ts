@@ -2854,70 +2854,69 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel.setScrollFactor(0);
     this.healthPanel.setDepth(OVERLAY_DEPTH + 5);
 
-    // ═══ 行城 (label left of bar, same vertical level) ═══
-    this.healthLabel = this.add.text(12, 16, '行城', {
+    // Background FIRST so it renders behind everything
+    this.healthBgRect = this.add.rectangle(130, 58, 260, 116, 0x2a2018, 0.95);
+    this.healthBgRect.setStrokeStyle(2, 0x5a4a38, 0.6);
+    this.healthPanel.add(this.healthBgRect);
+
+    // ═══ 行城 (label above bar, not overlapping) ═══
+    this.healthLabel = this.add.text(12, 8, '行城', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(96, 16, 150, 8, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(96, 28, 150, 8, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(21, 16, 146, 6, 0x4caf50);
+    this.healthBar = this.add.rectangle(21, 28, 146, 6, 0x4caf50);
     this.healthBar.setOrigin(0, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(96, 16, '', {
+    this.healthText = this.add.text(96, 28, '', {
       color: '#ffffff', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
 
     // Divider line
-    this.divider1 = this.add.rectangle(130, 34, 240, 1, 0x3a3020);
+    this.divider1 = this.add.rectangle(130, 46, 240, 1, 0x3a3020);
     this.healthPanel.add(this.divider1);
 
     // ═══ 建筑 ═══
-    this.buildingLabel = this.add.text(16, 42, '建筑', {
+    this.buildingLabel = this.add.text(16, 52, '建筑', {
       color: '#c8b898', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.buildingLabel);
-    this.towerCountText = this.add.text(68, 42, '', {
+    this.towerCountText = this.add.text(68, 52, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.towerCountText);
-    this.wallCountText = this.add.text(160, 42, '', {
+    this.wallCountText = this.add.text(160, 52, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.wallCountText);
 
     // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 58, 240, 1, 0x3a3020));
+    this.healthPanel.add(this.add.rectangle(130, 68, 240, 1, 0x3a3020));
 
     // ═══ 英雄 ═══
-    this.heroLabel = this.add.text(16, 64, '英雄', {
+    this.heroLabel = this.add.text(16, 74, '英雄', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.heroLabel);
-    this.weaponPrefix = this.add.text(16, 78, '武器：', {
+    this.weaponPrefix = this.add.text(16, 88, '武器：', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.weaponPrefix);
-    this.weaponLineText = this.add.text(62, 78, '', {
+    this.weaponLineText = this.add.text(62, 88, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.weaponLineText);
-    this.statsPrefix = this.add.text(16, 92, '属性：', {
+    this.statsPrefix = this.add.text(16, 102, '属性：', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.statsPrefix);
-    this.statsLineText = this.add.text(62, 92, '', {
+    this.statsLineText = this.add.text(62, 102, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.statsLineText);
-
-    // Dynamic background (sized to content, behind all text)
-    this.healthBgRect = this.add.rectangle(130, 58, 260, 116, 0x2a2018, 0.95);
-    this.healthBgRect.setStrokeStyle(2, 0x5a4a38, 0.6);
-    this.healthBgRect.setDepth(-1);
-    this.healthPanel.add(this.healthBgRect);
 
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
