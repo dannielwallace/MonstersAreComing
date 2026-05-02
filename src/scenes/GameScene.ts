@@ -149,6 +149,11 @@ const DAMAGE_FLASH_DURATION = 0.18;
 const WALL_BLOCK_RANGE = 25;
 const WALL_ATTACK_COOLDOWN = 1;
 const WALL_DAMAGE_PER_HIT = 5;
+/** Enemies stop at this distance from caravan center (caravan half-size 48 + margin) */
+const CARAVAN_BLOCK_RANGE = 56;
+/** Distance threshold for enemy separation */
+const ENEMY_SEPARATION_DIST = 18;
+const TOWER_BLOCK_RANGE = 20;
 const SCREEN_SHAKE_INTENSITY = 0.004;
 const SCREEN_SHAKE_DURATION = 120;
 
@@ -1618,7 +1623,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Wall block
+      // 1) Wall block
       let blockedByWall: Wall | undefined;
       let minWallDist = Number.POSITIVE_INFINITY;
       for (const wall of this.walls) {
@@ -1648,19 +1653,76 @@ export class GameScene extends Phaser.Scene {
         }
         continue;
       }
-
       enemy.blockedByWallId = undefined;
       enemy.wallAttackTimer = 0;
-      enemy.position = moveToward(enemy.position, caravanCenter, enemy.speed * deltaSeconds);
 
-      // Attack caravan
-      if (distanceSquared(enemy.position, caravanCenter) <= ENEMY_CONTACT_RANGE * ENEMY_CONTACT_RANGE && enemy.damageTimer <= 0) {
-        this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - enemy.contactDamage);
-        enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
-        this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
-        this.screenShake();
-        this.showDamageNumber(caravanCenter.x, caravanCenter.y - 50, enemy.contactDamage);
+      // 2) Tower / building block — enemies attack buildings in their path
+      let blockedByTower: Tower | undefined;
+      let minTowerDist = Number.POSITIVE_INFINITY;
+      for (const tower of this.towers) {
+        if (tower.type === 'attack-banner' || tower.type === 'speed-banner') continue;
+        const towerDist = distanceSquared(enemy.position, tower.position);
+        const blockThreshold = (enemy.radius + TOWER_BLOCK_RANGE) * (enemy.radius + TOWER_BLOCK_RANGE);
+        if (towerDist <= blockThreshold && towerDist < minTowerDist) {
+          blockedByTower = tower; minTowerDist = towerDist;
+        }
       }
+
+      if (blockedByTower) {
+        // Move toward tower, then stop and attack it
+        const dist = Math.sqrt(distanceSquared(enemy.position, blockedByTower.position));
+        const stopDist = enemy.radius + TOWER_BLOCK_RANGE;
+        if (dist > stopDist) {
+          enemy.position = moveToward(enemy.position, blockedByTower.position, enemy.speed * deltaSeconds);
+        }
+        // Damage the tower
+        const towerDef = BUILDING_DEFINITIONS[blockedByTower.type];
+        const towerDmg = Math.max(1, Math.round(towerDef.damage * 0.3));
+        blockedByTower.base.setData('health', (blockedByTower.base.getData('health') ?? towerDef.damage * 5) - towerDmg);
+        if ((blockedByTower.base.getData('health') ?? 0) <= 0) {
+          blockedByTower.base.destroy(true);
+          blockedByTower.label.destroy();
+          blockedByTower.rangeShape.destroy();
+          this.towers = this.towers.filter((t) => t.id !== blockedByTower!.id);
+        }
+        continue;
+      }
+
+      // 3) Caravan block — stop at caravan edge, not the center
+      const distToCaravan = Math.sqrt(distanceSquared(enemy.position, caravanCenter));
+      if (distToCaravan <= CARAVAN_BLOCK_RANGE) {
+        // Attack caravan
+        if (enemy.damageTimer <= 0) {
+          this.stats.caravanHealth = Math.max(0, this.stats.caravanHealth - enemy.contactDamage);
+          enemy.damageTimer = ENEMY_DAMAGE_COOLDOWN;
+          this.caravanDamageFlashTimer = DAMAGE_FLASH_DURATION;
+          this.screenShake();
+          this.showDamageNumber(caravanCenter.x, caravanCenter.y - 50, enemy.contactDamage);
+        }
+        continue;
+      }
+
+      // 4) Enemy separation — push apart when too close
+      let sepX = 0;
+      let sepY = 0;
+      for (const other of this.enemies) {
+        if (other.id === enemy.id) continue;
+        const dx = enemy.position.x - other.position.x;
+        const dy = enemy.position.y - other.position.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0 && dist < ENEMY_SEPARATION_DIST) {
+          const push = (ENEMY_SEPARATION_DIST - dist) / ENEMY_SEPARATION_DIST * 1.5;
+          sepX += (dx / dist) * push;
+          sepY += (dy / dist) * push;
+        }
+      }
+
+      // Move toward caravan, with separation
+      const moveTarget = {
+        x: caravanCenter.x + sepX,
+        y: caravanCenter.y + sepY,
+      };
+      enemy.position = moveToward(enemy.position, moveTarget, enemy.speed * deltaSeconds);
     }
   }
 
