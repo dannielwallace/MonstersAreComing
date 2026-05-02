@@ -75,6 +75,7 @@ import {
   getCaravanCenter,
   getSlotWorldPosition,
   CELL_SIZE,
+  CARAVAN_GRID_SIZE,
   GRID_BUILD_SLOTS,
   getBuildingName,
   getBuildingCostText,
@@ -154,6 +155,10 @@ const CARAVAN_BLOCK_RANGE = 56;
 /** Distance threshold for enemy separation */
 const ENEMY_SEPARATION_DIST = 18;
 const TOWER_BLOCK_RANGE = 20;
+/** Threshold for obstacle in front of caravan to block movement (from caravan front edge) */
+const CARAVAN_OBSTACLE_THRESHOLD = 20;
+/** Damage dealt by caravan per second to blocking obstacles */
+const CARAVAN_CRUSH_DAMAGE = 15;
 const SCREEN_SHAKE_INTENSITY = 0.004;
 const SCREEN_SHAKE_DURATION = 120;
 
@@ -2909,7 +2914,35 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
+    // ── Obstacle check: stop if something is in front of the caravan ──
+    const caravanHalf = (CARAVAN_GRID_SIZE * CELL_SIZE) / 2; // 48
+    const caravanFront = this.caravanTopLeft.x + caravanHalf * 2; // right edge
+    const caravanTop = this.caravanTopLeft.y;
+    const caravanBottom = this.caravanTopLeft.y + caravanHalf * 2;
+
+    let blockingEnemy: Enemy | undefined;
+    for (const enemy of this.enemies) {
+      const dx = enemy.position.x - caravanFront;
+      const dy = Math.abs(enemy.position.y - (caravanTop + caravanHalf));
+      if (dx > -CARAVAN_OBSTACLE_THRESHOLD && dx < caravanHalf + CARAVAN_OBSTACLE_THRESHOLD
+          && dy < caravanHalf + enemy.radius) {
+        blockingEnemy = enemy;
+        break;
+      }
+    }
+
+    if (blockingEnemy) {
+      // Caravan is blocked — attack the obstacle
+      blockingEnemy.health -= CARAVAN_CRUSH_DAMAGE * deltaSeconds;
+      blockingEnemy.hitFlashTimer = 0.1;
+      if (blockingEnemy.health <= 0) {
+        this.removeEnemy(blockingEnemy);
+      }
+    } else {
+      // Not blocked — move forward
+      this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
+    }
+
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
     this.caravanBody.setPosition(caravanCenter.x, caravanCenter.y);
 
