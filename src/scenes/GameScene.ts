@@ -2894,13 +2894,13 @@ export class GameScene extends Phaser.Scene {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.heroLabel);
-    this.weaponIcon = this.add.container(48, 78);
-    this.healthPanel.add(this.weaponIcon);
-    this.weaponNameText = this.add.text(62, 68, '', {
+    this.weaponNameText = this.add.text(16, 82, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.weaponNameText);
-    this.weaponStatsText = this.add.text(62, 84, '', {
+    this.weaponIcon = this.add.container(18, 98);
+    this.healthPanel.add(this.weaponIcon);
+    this.weaponStatsText = this.add.text(34, 98, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.weaponStatsText);
