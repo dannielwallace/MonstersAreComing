@@ -2911,45 +2911,60 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    // ── Obstacle check: only obstacles strictly IN FRONT of the right edge block ──
+    // ── Obstacle check: only obstacles strictly IN FRONT of the forward edge block ──
     const moveAmount = CARAVAN_SPEED * deltaSeconds;
 
-    // Compute the caravan body bounding box (just the 2x2 caravan, not buildings)
-    const caravanLeft = this.caravanTopLeft.x;
-    const caravanTop = this.caravanTopLeft.y;
-    const caravanRight = caravanLeft + CARAVAN_GRID_SIZE * CELL_SIZE;
-    const caravanBottom = caravanTop + CARAVAN_GRID_SIZE * CELL_SIZE;
+    // Collect the forward edge: right-side slots that form the caravan's leading face.
+    // These are: the caravan body's right side (col=0..1, rows=0..1) plus any buildings
+    // on the rightmost column (col=2). Each slot on the forward edge has an X extent and Y range.
+    type ForwardCell = { xRight: number; yTop: number; yBottom: number };
+    const forwardCells: ForwardCell[] = [];
 
-    // The forward edge: rightmost point of caravan + any buildings on the front side
-    let forwardEdge = caravanRight;
+    // Caravan body right edge (always present): col=2 at pixel x
+    const caravanRight = this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE;
+    const caravanTop = this.caravanTopLeft.y;
+    const caravanBottom = caravanTop + CARAVAN_GRID_SIZE * CELL_SIZE;
+    forwardCells.push({ xRight: caravanRight, yTop: caravanTop, yBottom: caravanBottom });
+
+    // Placed buildings: each building extends the forward edge to its right edge
     const occupiedSlotIds = this.getOccupiedSlotIds();
     for (const slot of GRID_BUILD_SLOTS) {
       if (!occupiedSlotIds.has(slot.id)) continue;
-      const slotRight = caravanLeft + (slot.gridOffset.col + 1) * CELL_SIZE;
-      if (slotRight > forwardEdge) forwardEdge = slotRight;
+      const slotRight = this.caravanTopLeft.x + (slot.gridOffset.col + 1) * CELL_SIZE;
+      const slotTop = this.caravanTopLeft.y + slot.gridOffset.row * CELL_SIZE;
+      const slotBottom = this.caravanTopLeft.y + (slot.gridOffset.row + 1) * CELL_SIZE;
+      forwardCells.push({ xRight: slotRight, yTop: slotTop, yBottom: slotBottom });
     }
 
-    // The swept edge: where the caravan would be next frame if it moved
+    // Find the maximum right edge (forwardmost point)
+    let forwardEdge = 0;
+    for (const cell of forwardCells) {
+      if (cell.xRight > forwardEdge) forwardEdge = cell.xRight;
+    }
     const sweptEdge = forwardEdge + moveAmount;
 
     let blocked = false;
 
-    // Check enemies: block only if enemy is strictly in front of the forward edge
-    // (enemy's left edge >= forwardEdge) and vertically aligned with caravan body
+    // Check enemies: block if enemy is in front of the forward edge AND
+    // vertically overlaps with ANY forward cell's Y range
     for (const enemy of this.enemies) {
       if (enemy.position.x - enemy.radius >= forwardEdge
-          && enemy.position.x - enemy.radius < sweptEdge
-          && enemy.position.y + enemy.radius > caravanTop
-          && enemy.position.y - enemy.radius < caravanBottom) {
-        blocked = true;
-        break;
+          && enemy.position.x - enemy.radius < sweptEdge) {
+        for (const cell of forwardCells) {
+          if (enemy.position.y + enemy.radius > cell.yTop
+              && enemy.position.y - enemy.radius < cell.yBottom) {
+            blocked = true;
+            break;
+          }
+        }
       }
+      if (blocked) break;
     }
 
-    // Check resource nodes: block only if node is in front of the forward edge
+    // Check resource nodes: same logic
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
-        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, forwardCells)) {
           blocked = true;
           break;
         }
@@ -2957,7 +2972,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
-        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, forwardCells)) {
           blocked = true;
           break;
         }
@@ -2965,7 +2980,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
-        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, forwardCells)) {
           blocked = true;
           break;
         }
@@ -3020,22 +3035,26 @@ export class GameScene extends Phaser.Scene {
     if (this.buildMode) this.updateBuildSlotHighlights();
   }
 
-  /** Check if a resource node is strictly in front of the caravan's forward edge */
+  /** Check if a resource node is strictly in front of the forward edge
+   *  and vertically overlaps with any forward-facing cell */
   private isNodeInFrontPath(
     node: ResourceNode,
     forwardEdge: number,
     sweptEdge: number,
-    caravanTop: number,
-    caravanBottom: number,
+    forwardCells: Array<{ yTop: number; yBottom: number }>,
   ): boolean {
     if (node.remaining <= 0) return false;
     const nLeft = node.position.x - node.radius;
     const nRight = node.position.x + node.radius;
-    // Node blocks only if its left edge is at or past the forward edge (strictly in front)
-    return nLeft >= forwardEdge
-        && nLeft < sweptEdge
-        && node.position.y + node.radius > caravanTop
-        && node.position.y - node.radius < caravanBottom;
+    // Node must be strictly in front of the forward edge
+    if (nLeft < forwardEdge || nLeft >= sweptEdge) return false;
+    // Check vertical overlap with any forward cell
+    for (const cell of forwardCells) {
+      if (nRight > cell.yTop && node.position.y - node.radius < cell.yBottom) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // ═══════════════════════════════════════════════════
