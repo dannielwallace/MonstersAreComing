@@ -2837,8 +2837,8 @@ export class GameScene extends Phaser.Scene {
 
     // Wave & Level panel
     if (this.waveText && this.xpBarFill && this.xpText) {
-      const wallSlotCount = GRID_BUILD_SLOTS.filter((s) => s.buildingType === 'wall').length;
-      this.waveText.setText(`波次 ${this.waveState.currentWave}/${MAX_WAVE}  |  ${Math.ceil(this.waveState.nextWaveTimer)}s  |  箭塔:${this.towers.length}  城墙:${this.walls.length}/${wallSlotCount}`);
+      const totalSlotCount = GRID_BUILD_SLOTS.length;
+      this.waveText.setText(`波次 ${this.waveState.currentWave}/${MAX_WAVE}  |  ${Math.ceil(this.waveState.nextWaveTimer)}s  |  箭塔:${this.towers.length}  城墙:${this.walls.length}/${totalSlotCount}`);
       const req = requiredExperienceForLevel(this.experience.level);
       const xpRatio = req > 0 ? this.experience.experience / req : 0;
       this.xpBarFill.setSize(Math.max(0, 226 * Math.min(1, xpRatio)), 6);

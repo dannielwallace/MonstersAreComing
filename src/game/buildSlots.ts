@@ -54,12 +54,9 @@ export const GRID_BUILD_SLOTS: BuildSlot[] = (() => {
         continue; // 跳过行城本体
       }
       const key = `cell-${c}-${r}`;
-      // 前方 4 格（col=2）只允许建墙，其他格子无限制
-      const isFrontColumn = c === CARAVAN_GRID_SIZE;
       slots.push({
         id: key,
         gridOffset: { col: c, row: r },
-        buildingType: isFrontColumn ? 'wall' : undefined,
       });
     }
   }

@@ -13,19 +13,8 @@ describe('GRID_BUILD_SLOTS', () => {
     expect(GRID_BUILD_SLOTS).toHaveLength(12);
   });
 
-  it('marks front column slots as wall-only', () => {
-    const frontSlots = GRID_BUILD_SLOTS.filter(
-      (s) => s.gridOffset.col === CARAVAN_GRID_SIZE,
-    );
-    expect(frontSlots).toHaveLength(4);
-    frontSlots.forEach((s) => expect(s.buildingType).toBe('wall'));
-  });
-
-  it('has no building type restriction on non-front slots', () => {
-    const otherSlots = GRID_BUILD_SLOTS.filter(
-      (s) => s.gridOffset.col !== CARAVAN_GRID_SIZE,
-    );
-    otherSlots.forEach((s) => expect(s.buildingType).toBeUndefined());
+  it('has no building type restriction on any slot', () => {
+    GRID_BUILD_SLOTS.forEach((s) => expect(s.buildingType).toBeUndefined());
   });
 });
 
