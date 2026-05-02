@@ -31,9 +31,11 @@ import {
   addWeapon,
   createWeaponState,
   getWeaponDefinition,
+  WEAPON_DEFINITIONS,
   markWeaponFired,
   updateWeaponTimers,
   type WeaponState,
+  type WeaponType,
 } from '../game/weapons';
 import {
   createSummonState,
@@ -295,6 +297,10 @@ export class GameScene extends Phaser.Scene {
   private healthBarBg?: Phaser.GameObjects.Rectangle;
   private healthText?: Phaser.GameObjects.Text;
   private healthLabel?: Phaser.GameObjects.Text;
+  private weaponPanel?: Phaser.GameObjects.Container;
+  private weaponIcon?: Phaser.GameObjects.Container;
+  private weaponNameText?: Phaser.GameObjects.Text;
+  private weaponStatsText?: Phaser.GameObjects.Text;
   private wavePanel?: Phaser.GameObjects.Container;
   private waveText?: Phaser.GameObjects.Text;
   private xpBarBg?: Phaser.GameObjects.Rectangle;
@@ -1864,6 +1870,95 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private drawWeaponProjectile(type: WeaponType, from: Point, to: Point): void {
+    const dist = Math.sqrt(distanceSquared(from, to));
+    switch (type) {
+      case 'axe': {
+        // Large orange chopping arc
+        const proj = this.add.circle(from.x, from.y, 6, 0xff8c42);
+        proj.setStrokeStyle(2, 0xcc6a20, 0.8);
+        proj.setDepth(16);
+        const dur = (dist / 300) * 1000;
+        this.tweens.add({
+          targets: proj, x: to.x, y: to.y, rotation: Math.PI * 2,
+          duration: dur, ease: 'Linear',
+          onComplete: () => {
+            const flash = this.add.circle(to.x, to.y, 12, 0xff8c42, 0.5);
+            flash.setDepth(16);
+            this.tweens.add({ targets: flash, alpha: 0, scale: 2, duration: 150, onComplete: () => flash.destroy() });
+            proj.destroy();
+          },
+        });
+        break;
+      }
+      case 'saw': {
+        // Yellow spinning disc with trail
+        const proj = this.add.circle(from.x, from.y, 5, 0xffd700);
+        proj.setStrokeStyle(1.5, 0xccaa00, 0.8);
+        proj.setDepth(16);
+        const dur = (dist / 420) * 1000;
+        this.tweens.add({
+          targets: proj, x: to.x, y: to.y, rotation: Math.PI * 4,
+          duration: dur, ease: 'Linear',
+          onUpdate: () => {
+            if (Math.random() < 0.3) {
+              const spark = this.add.circle(proj.x, proj.y, 2, 0xffd700, 0.4);
+              spark.setDepth(15);
+              this.tweens.add({ targets: spark, alpha: 0, scale: 0.5, duration: 200, onComplete: () => spark.destroy() });
+            }
+          },
+          onComplete: () => {
+            const flash = this.add.circle(to.x, to.y, 10, 0xffd700, 0.5);
+            flash.setDepth(16);
+            this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 120, onComplete: () => flash.destroy() });
+            proj.destroy();
+          },
+        });
+        break;
+      }
+      case 'drill': {
+        // Blue piercing drill, thick and fast
+        const proj = this.add.triangle(from.x, from.y, 0, -8, 6, 4, -6, 4, 0x42a5f5);
+        proj.setStrokeStyle(1.5, 0x1e88e5, 0.7);
+        proj.setDepth(16);
+        const dur = (dist / 500) * 1000;
+        this.tweens.add({
+          targets: proj, x: to.x, y: to.y, scaleX: 1.3, scaleY: 1.3,
+          duration: dur, ease: 'Power2',
+          onComplete: () => {
+            const flash = this.add.circle(to.x, to.y, 8, 0x42a5f5, 0.6);
+            flash.setDepth(16);
+            this.tweens.add({ targets: flash, alpha: 0, scale: 1.8, duration: 100, onComplete: () => flash.destroy() });
+            proj.destroy();
+          },
+        });
+        break;
+      }
+      case 'ritual-dagger': {
+        // Purple energy bolt with ghostly afterglow
+        const proj = this.add.circle(from.x, from.y, 4, 0xb388ff);
+        proj.setStrokeStyle(2, 0x7c4dff, 0.6);
+        proj.setDepth(16);
+        const dur = (dist / 380) * 1000;
+        const ghost = this.add.circle(from.x, from.y, 3, 0xb388ff, 0.3);
+        ghost.setDepth(15);
+        this.tweens.add({ targets: ghost, x: to.x, y: to.y, duration: dur + 80, ease: 'Linear' });
+        this.tweens.add({
+          targets: proj, x: to.x, y: to.y, alpha: 0.6,
+          duration: dur, ease: 'Sine.easeIn',
+          onComplete: () => {
+            const flash = this.add.circle(to.x, to.y, 14, 0xb388ff, 0.3);
+            flash.setDepth(16);
+            this.tweens.add({ targets: flash, alpha: 0, scale: 3, duration: 200, onComplete: () => flash.destroy() });
+            proj.destroy();
+            ghost.destroy();
+          },
+        });
+        break;
+      }
+    }
+  }
+
   private drawSplashCircle(center: Point, radius: number): void {
     const circle = this.add.circle(center.x, center.y, radius, 0xff9800, 0);
     circle.setStrokeStyle(2, 0xff9800, 0.4);
@@ -2014,6 +2109,7 @@ export class GameScene extends Phaser.Scene {
     if (item.kind === 'weapon' && item.weaponType) {
       this.weapons = addWeapon(this.weapons, item.weaponType);
       this.showFeedback(`获得武器：${getWeaponDefinition(item.weaponType)?.name ?? item.weaponType}`, '#d4a843');
+      this.updateHudPanels();
     }
   }
 
@@ -2047,7 +2143,7 @@ export class GameScene extends Phaser.Scene {
         }
         this.removeEnemy(target as any);
       }
-      this.drawProjectileToTarget(this.playerPosition, target.position, 0xd4a843, 380);
+      this.drawWeaponProjectile(weapon.type, this.playerPosition, target.position);
       const cooldown = definition.cooldown * weapon.cooldownMultiplier * this.stats.weaponCooldownMultiplier;
       return { ...weapon, cooldownTimer: cooldown };
     });
@@ -2767,6 +2863,22 @@ export class GameScene extends Phaser.Scene {
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
 
+    // Weapon panel (below health panel, left side)
+    this.weaponPanel = this.add.container(16, 84);
+    this.weaponPanel.setScrollFactor(0);
+    this.weaponPanel.setDepth(OVERLAY_DEPTH + 5);
+    this.weaponPanel.add(this.add.rectangle(100, 28, 200, 56, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.weaponNameText = this.add.text(32, 8, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '13px', fontStyle: 'bold',
+    });
+    this.weaponPanel.add(this.weaponNameText);
+    this.weaponStatsText = this.add.text(32, 28, '', {
+      color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.weaponPanel.add(this.weaponStatsText);
+    this.weaponIcon = this.add.container(16, 16);
+    this.weaponPanel.add(this.weaponIcon);
+
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
     this.wavePanel.setScrollFactor(0);
@@ -2835,6 +2947,9 @@ export class GameScene extends Phaser.Scene {
       this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
     }
 
+    // Weapon panel
+    this.updateWeaponHud();
+
     // Wave & Level panel
     if (this.waveText && this.xpBarFill && this.xpText) {
       const totalSlotCount = GRID_BUILD_SLOTS.length;
@@ -2855,8 +2970,50 @@ export class GameScene extends Phaser.Scene {
     this.refreshCardAffordability();
   }
 
+  private updateWeaponHud(): void {
+    if (!this.weaponNameText || !this.weaponStatsText || !this.weaponIcon) return;
+    const owned = this.weapons.owned;
+    if (owned.length === 0) {
+      this.weaponNameText.setText('无武器');
+      this.weaponStatsText.setText('');
+      this.weaponIcon.removeAll(true);
+      return;
+    }
+    // Show first ready weapon (or the only one)
+    const active = owned.find((w) => w.cooldownTimer <= 0) ?? owned[0];
+    const def = WEAPON_DEFINITIONS[active.type];
+    if (!def) return;
+    const effectiveDmg = Math.round(def.damage * active.damageMultiplier * this.stats.weaponDamageMultiplier);
+    const effectiveRange = Math.round(def.range + active.rangeBonus + this.stats.weaponRangeBonus);
+    this.weaponNameText.setText(def.name);
+    this.weaponStatsText.setText(`伤害 ${effectiveDmg}  射程 ${effectiveRange}`);
+
+    // Icon: clear and rebuild
+    this.weaponIcon.removeAll(true);
+    const colors: Record<WeaponType, number> = {
+      'axe': 0xff8c42,
+      'saw': 0xffd700,
+      'drill': 0x42a5f5,
+      'ritual-dagger': 0xb388ff,
+    };
+    const color = colors[active.type] ?? 0xd4a843;
+    const icon = this.add.circle(0, 0, 10, color);
+    icon.setStrokeStyle(2, color, 0.8);
+    this.weaponIcon.add(icon);
+    // Inner symbol
+    const symbols: Record<WeaponType, string> = {
+      'axe': '⚔', 'saw': '⟳', 'drill': '▼', 'ritual-dagger': '†',
+    };
+    this.weaponIcon.add(
+      this.add.text(0, 0, symbols[active.type], {
+        color: '#1a1510', fontFamily: 'Arial', fontSize: '12px',
+      }).setOrigin(0.5),
+    );
+  }
+
   private destroyHudPanels(): void {
     this.healthPanel?.destroy(true);
+    this.weaponPanel?.destroy(true);
     this.wavePanel?.destroy(true);
     this.resourcePanel?.destroy(true);
     this.shopButton?.destroy();
