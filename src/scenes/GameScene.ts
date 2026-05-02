@@ -297,12 +297,12 @@ export class GameScene extends Phaser.Scene {
   private healthBarBg?: Phaser.GameObjects.Rectangle;
   private healthText?: Phaser.GameObjects.Text;
   private healthLabel?: Phaser.GameObjects.Text;
-  private weaponPanel?: Phaser.GameObjects.Container;
   private weaponIcon?: Phaser.GameObjects.Container;
   private weaponNameText?: Phaser.GameObjects.Text;
   private weaponStatsText?: Phaser.GameObjects.Text;
-  private playerStatsPanel?: Phaser.GameObjects.Container;
   private playerStatsText?: Phaser.GameObjects.Text;
+  private towerCountText?: Phaser.GameObjects.Text;
+  private wallCountText?: Phaser.GameObjects.Text;
   private wavePanel?: Phaser.GameObjects.Container;
   private waveText?: Phaser.GameObjects.Text;
   private xpBarBg?: Phaser.GameObjects.Rectangle;
@@ -2845,51 +2845,61 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private createHudPanels(): void {
-    // Health panel (top-left)
+    // ── Left unified panel (caravan, towers, weapons, buffs) ──
     this.healthPanel = this.add.container(16, 16);
     this.healthPanel.setScrollFactor(0);
     this.healthPanel.setDepth(OVERLAY_DEPTH + 5);
-    this.healthPanel.add(this.add.rectangle(100, 30, 200, 60, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
-    this.healthLabel = this.add.text(16, 6, '行城', {
+    this.healthPanel.add(this.add.rectangle(130, 72, 260, 144, 0x2a2018, 0.95).setStrokeStyle(2, 0x5a4a38, 0.6));
+
+    // Row 1: Caravan health
+    this.healthLabel = this.add.text(16, 8, '行城', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '13px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(100, 28, 176, 10, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(130, 26, 200, 10, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(12, 28, 172, 6, 0x4caf50);
+    this.healthBar = this.add.rectangle(30, 26, 196, 6, 0x4caf50);
     this.healthBar.setOrigin(0, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(100, 46, '', {
+    this.healthText = this.add.text(130, 44, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
     });
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
 
-    // Weapon panel (below health panel, left side)
-    this.weaponPanel = this.add.container(16, 84);
-    this.weaponPanel.setScrollFactor(0);
-    this.weaponPanel.setDepth(OVERLAY_DEPTH + 5);
-    this.weaponPanel.add(this.add.rectangle(100, 28, 200, 56, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
-    this.weaponNameText = this.add.text(32, 8, '', {
-      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '13px', fontStyle: 'bold',
+    // Divider line
+    this.healthPanel.add(this.add.rectangle(130, 56, 240, 1, 0x3a3020));
+
+    // Row 2: Weapon name + icon
+    this.weaponIcon = this.add.container(22, 68);
+    this.healthPanel.add(this.weaponIcon);
+    this.weaponNameText = this.add.text(40, 62, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
     });
-    this.weaponPanel.add(this.weaponNameText);
-    this.weaponStatsText = this.add.text(32, 28, '', {
+    this.healthPanel.add(this.weaponNameText);
+    this.weaponStatsText = this.add.text(40, 78, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
-    this.weaponPanel.add(this.weaponStatsText);
-    this.weaponIcon = this.add.container(16, 16);
-    this.weaponPanel.add(this.weaponIcon);
+    this.healthPanel.add(this.weaponStatsText);
 
-    // Player stats panel (below weapon panel, left side)
-    this.playerStatsPanel = this.add.container(16, 148);
-    this.playerStatsPanel.setScrollFactor(0);
-    this.playerStatsPanel.setDepth(OVERLAY_DEPTH + 5);
-    this.playerStatsPanel.add(this.add.rectangle(100, 22, 200, 44, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
-    this.playerStatsText = this.add.text(16, 6, '', {
+    // Divider line
+    this.healthPanel.add(this.add.rectangle(130, 94, 240, 1, 0x3a3020));
+
+    // Row 3: Tower/Wall counts
+    this.towerCountText = this.add.text(16, 100, '', {
       color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
-    this.playerStatsPanel.add(this.playerStatsText);
+    this.healthPanel.add(this.towerCountText);
+    this.wallCountText = this.add.text(140, 100, '', {
+      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.healthPanel.add(this.wallCountText);
+
+    // Row 4: Buff stats (weapon & summon bonuses)
+    this.playerStatsText = this.add.text(16, 118, '', {
+      color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.healthPanel.add(this.playerStatsText);
 
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
@@ -2950,25 +2960,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHudPanels(): void {
-    // Health panel
+    // Health bar
     if (this.healthBar && this.healthText) {
       const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
       const hpColor = hpRatio > 0.5 ? 0x4caf50 : hpRatio > 0.25 ? 0xfdd835 : 0xef4444;
       this.healthBar.setFillStyle(hpColor);
-      this.healthBar.setSize(Math.max(0, 172 * hpRatio), 6);
+      this.healthBar.setSize(Math.max(0, 196 * hpRatio), 6);
       this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
     }
 
-    // Weapon panel
-    this.updateWeaponHud();
+    // Tower / Wall counts
+    const totalSlotCount = GRID_BUILD_SLOTS.length;
+    if (this.towerCountText) this.towerCountText.setText(`箭塔 ${this.towers.length}`);
+    if (this.wallCountText) this.wallCountText.setText(`城墙 ${this.walls.length}/${totalSlotCount}`);
 
-    // Player stats panel
+    // Weapon & stats
+    this.updateWeaponHud();
     this.updatePlayerStatsHud();
 
     // Wave & Level panel
     if (this.waveText && this.xpBarFill && this.xpText) {
-      const totalSlotCount = GRID_BUILD_SLOTS.length;
-      this.waveText.setText(`波次 ${this.waveState.currentWave}/${MAX_WAVE}  |  ${Math.ceil(this.waveState.nextWaveTimer)}s  |  箭塔:${this.towers.length}  城墙:${this.walls.length}/${totalSlotCount}`);
+      this.waveText.setText(`波次 ${this.waveState.currentWave}/${MAX_WAVE}  |  ${Math.ceil(this.waveState.nextWaveTimer)}s`);
       const req = requiredExperienceForLevel(this.experience.level);
       const xpRatio = req > 0 ? this.experience.experience / req : 0;
       this.xpBarFill.setSize(Math.max(0, 226 * Math.min(1, xpRatio)), 6);
@@ -3032,17 +3044,11 @@ export class GameScene extends Phaser.Scene {
     const speedBonus = ((1 - this.stats.weaponCooldownMultiplier) * 100).toFixed(0);
     const rangeBonus = this.stats.weaponRangeBonus.toFixed(0);
     const summonDmg = ((this.stats.summonDamageMultiplier - 1) * 100).toFixed(0);
-    const lines = [
-      `武器伤害 +${dmgBonus}%  攻速 +${speedBonus}%  射程 +${rangeBonus}`,
-      `召唤伤害 +${summonDmg}%`,
-    ];
-    this.playerStatsText.setText(lines.join('\n'));
+    this.playerStatsText.setText(`武器 伤害+${dmgBonus}%  攻速+${speedBonus}%  射程+${rangeBonus}  |  召唤 伤害+${summonDmg}%`);
   }
 
   private destroyHudPanels(): void {
     this.healthPanel?.destroy(true);
-    this.weaponPanel?.destroy(true);
-    this.playerStatsPanel?.destroy(true);
     this.wavePanel?.destroy(true);
     this.resourcePanel?.destroy(true);
     this.shopButton?.destroy();
