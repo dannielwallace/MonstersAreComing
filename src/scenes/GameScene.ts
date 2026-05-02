@@ -297,7 +297,9 @@ export class GameScene extends Phaser.Scene {
   private healthBarBg?: Phaser.GameObjects.Rectangle;
   private healthText?: Phaser.GameObjects.Text;
   private healthLabel?: Phaser.GameObjects.Text;
+  private buildingLabel?: Phaser.GameObjects.Text;
   private weaponIcon?: Phaser.GameObjects.Container;
+  private heroLabel?: Phaser.GameObjects.Text;
   private weaponNameText?: Phaser.GameObjects.Text;
   private weaponStatsText?: Phaser.GameObjects.Text;
   private playerStatsText?: Phaser.GameObjects.Text;
@@ -2849,55 +2851,66 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel = this.add.container(16, 16);
     this.healthPanel.setScrollFactor(0);
     this.healthPanel.setDepth(OVERLAY_DEPTH + 5);
-    this.healthPanel.add(this.add.rectangle(130, 72, 260, 144, 0x2a2018, 0.95).setStrokeStyle(2, 0x5a4a38, 0.6));
+    this.healthPanel.add(this.add.rectangle(130, 80, 260, 160, 0x2a2018, 0.95).setStrokeStyle(2, 0x5a4a38, 0.6));
 
-    // Row 1: Caravan health
+    // ═══ 行城 ═══
     this.healthLabel = this.add.text(16, 8, '行城', {
-      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '13px', fontStyle: 'bold',
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(130, 26, 200, 10, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(140, 10, 180, 8, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(30, 26, 196, 6, 0x4caf50);
+    this.healthBar = this.add.rectangle(40, 10, 176, 4, 0x4caf50);
     this.healthBar.setOrigin(0, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(130, 44, '', {
+    this.healthText = this.add.text(130, 24, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
     });
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
 
     // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 56, 240, 1, 0x3a3020));
+    this.healthPanel.add(this.add.rectangle(130, 38, 240, 1, 0x3a3020));
 
-    // Row 2: Weapon name + icon
-    this.weaponIcon = this.add.container(22, 68);
+    // ═══ 建筑 ═══
+    this.buildingLabel = this.add.text(16, 44, '建筑', {
+      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
+    });
+    this.healthPanel.add(this.buildingLabel);
+    this.towerCountText = this.add.text(68, 44, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.healthPanel.add(this.towerCountText);
+    this.wallCountText = this.add.text(160, 44, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.healthPanel.add(this.wallCountText);
+
+    // Divider line
+    this.healthPanel.add(this.add.rectangle(130, 62, 240, 1, 0x3a3020));
+
+    // ═══ 英雄 ═══
+    this.heroLabel = this.add.text(16, 68, '英雄', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
+    });
+    this.healthPanel.add(this.heroLabel);
+    this.weaponIcon = this.add.container(24, 80);
     this.healthPanel.add(this.weaponIcon);
-    this.weaponNameText = this.add.text(40, 62, '', {
+    this.weaponNameText = this.add.text(38, 68, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.weaponNameText);
-    this.weaponStatsText = this.add.text(40, 78, '', {
+    this.weaponStatsText = this.add.text(38, 82, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.weaponStatsText);
 
     // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 94, 240, 1, 0x3a3020));
+    this.healthPanel.add(this.add.rectangle(130, 100, 240, 1, 0x3a3020));
 
-    // Row 3: Tower/Wall counts
-    this.towerCountText = this.add.text(16, 100, '', {
+    // ═══ 属性加成 ═══
+    this.playerStatsText = this.add.text(16, 108, '', {
       color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
-    });
-    this.healthPanel.add(this.towerCountText);
-    this.wallCountText = this.add.text(140, 100, '', {
-      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
-    });
-    this.healthPanel.add(this.wallCountText);
-
-    // Row 4: Buff stats (weapon & summon bonuses)
-    this.playerStatsText = this.add.text(16, 118, '', {
-      color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.playerStatsText);
 
@@ -2998,12 +3011,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateWeaponHud(): void {
-    if (!this.weaponNameText || !this.weaponStatsText || !this.weaponIcon) return;
+    if (!this.weaponNameText || !this.weaponStatsText || !this.weaponIcon || !this.heroLabel) return;
     const owned = this.weapons.owned;
     if (owned.length === 0) {
       this.weaponNameText.setText('无武器');
       this.weaponStatsText.setText('');
       this.weaponIcon.removeAll(true);
+      this.heroLabel.setColor('#d4a843');
       return;
     }
     // Show most recently acquired weapon (last in array)
@@ -3014,6 +3028,12 @@ export class GameScene extends Phaser.Scene {
     const effectiveRange = Math.round(def.range + active.rangeBonus + this.stats.weaponRangeBonus);
     this.weaponNameText.setText(def.name);
     this.weaponStatsText.setText(`伤害 ${effectiveDmg}  射程 ${effectiveRange}`);
+
+    // Color hero label to match weapon
+    const labelColors: Record<WeaponType, string> = {
+      'axe': '#ff8c42', 'saw': '#ffd700', 'drill': '#42a5f5', 'ritual-dagger': '#b388ff',
+    };
+    this.heroLabel.setColor(labelColors[active.type] ?? '#d4a843');
 
     // Icon: clear and rebuild
     this.weaponIcon.removeAll(true);
@@ -3044,7 +3064,7 @@ export class GameScene extends Phaser.Scene {
     const speedBonus = ((1 - this.stats.weaponCooldownMultiplier) * 100).toFixed(0);
     const rangeBonus = this.stats.weaponRangeBonus.toFixed(0);
     const summonDmg = ((this.stats.summonDamageMultiplier - 1) * 100).toFixed(0);
-    this.playerStatsText.setText(`武器 伤害+${dmgBonus}%  攻速+${speedBonus}%  射程+${rangeBonus}  |  召唤 伤害+${summonDmg}%`);
+    this.playerStatsText.setText(`伤害+${dmgBonus}%  攻速+${speedBonus}%  射程+${rangeBonus}   召唤伤害+${summonDmg}%`);
   }
 
   private destroyHudPanels(): void {
