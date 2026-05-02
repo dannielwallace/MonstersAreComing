@@ -34,6 +34,11 @@ export type MinionDeathEffect = {
   damage: number;
   radius: number;
   position: Point;
+} | {
+  type: 'resource-drop';
+  resource: 'gold' | 'wood' | 'stone' | 'xp';
+  amount: number;
+  position: Point;
 };
 
 export const MINION_DEFINITIONS: Record<MinionType, MinionDefinition> = {
@@ -83,14 +88,36 @@ export function updateMinionLifetime(state: SummonState, deltaSeconds: number): 
 export function killMinion(
   state: SummonState,
   minionId: string,
+  synergy?: {
+    deathExplosionBonus?: number;
+    deathResourceChance?: number;
+    deathResourceType?: 'gold' | 'wood' | 'stone' | 'xp';
+    explosionRadiusMult?: number;
+  },
 ): { state: SummonState; effects: MinionDeathEffect[] } {
   const minion = state.minions.find((candidate) => candidate.id === minionId);
   if (!minion) return { state, effects: [] };
-  const explosion = MINION_DEFINITIONS[minion.type].deathExplosion;
+  const def = MINION_DEFINITIONS[minion.type];
+  const effects: MinionDeathEffect[] = [];
+
+  // Base explosion (bomber) or bonus explosion from synergy
+  const baseExplosion = def.deathExplosion;
+  const bonusDmg = synergy?.deathExplosionBonus ?? 0;
+  const radiusMult = synergy?.explosionRadiusMult ?? 1;
+  const explosionDmg = baseExplosion ? baseExplosion.damage + bonusDmg : bonusDmg;
+  const explosionRadius = baseExplosion ? Math.round(baseExplosion.radius * radiusMult) : 36;
+  if (explosionDmg > 0) {
+    effects.push({ type: 'explosion', damage: explosionDmg, radius: explosionRadius, position: { ...minion.position } });
+  }
+
+  // Resource drop from synergy
+  if (synergy?.deathResourceChance && synergy.deathResourceChance > 0 && Math.random() < synergy.deathResourceChance) {
+    const resType = synergy.deathResourceType ?? 'gold';
+    effects.push({ type: 'resource-drop', resource: resType, amount: 1, position: { ...minion.position } });
+  }
+
   return {
     state: { ...state, minions: state.minions.filter((candidate) => candidate.id !== minionId) },
-    effects: explosion
-      ? [{ type: 'explosion', damage: explosion.damage, radius: explosion.radius, position: { ...minion.position } }]
-      : [],
+    effects,
   };
 }

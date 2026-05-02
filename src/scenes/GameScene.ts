@@ -48,11 +48,14 @@ import {
 } from '../game/summons';
 import {
   completeRewardCircle,
-  createRewardCircle,
   createRouteEventState,
+  createRouteForkState,
+  createRewardCircle,
   updateRewardCircle,
   type RouteEvent,
   type RouteEventState,
+  type RouteFork,
+  type RouteModifier,
 } from '../game/events';
 import {
   createBossState,
@@ -245,6 +248,12 @@ export class GameScene extends Phaser.Scene {
   private upgradeOverlay?: Phaser.GameObjects.Container;
   private upgradeCards: Phaser.GameObjects.Rectangle[] = [];
   private upgradeTexts: Phaser.GameObjects.Text[] = [];
+  private forkSelecting = false;
+  private forkOverlay?: Phaser.GameObjects.Container;
+  private forkButtons: Phaser.GameObjects.Rectangle[] = [];
+  private forkTexts: Phaser.GameObjects.Text[] = [];
+  private forkChoices: { label: string; description: string; modifier: RouteModifier }[] = [];
+  private currentFork?: RouteFork;
   private wallet: ResourceWallet = createResourceWallet();
   private carried: CarriedResources = createCarriedResources();
   private elapsedSeconds = 0;
@@ -317,10 +326,12 @@ export class GameScene extends Phaser.Scene {
   private shopLabel?: Phaser.GameObjects.Text;
   private walletText?: Phaser.GameObjects.Text;
   private carriedText?: Phaser.GameObjects.Text;
+  private routeIndicatorText?: Phaser.GameObjects.Text;
 
   // P1 systems
   private shop?: ShopState;
   private shopOverlay?: Phaser.GameObjects.Container;
+  private shopOverlayBg?: Phaser.GameObjects.Rectangle;
   private shopOverlayButtons: Phaser.GameObjects.Rectangle[] = [];
   private shopOverlayTexts: Phaser.GameObjects.Text[] = [];
   private shopOpen = false;
@@ -328,7 +339,10 @@ export class GameScene extends Phaser.Scene {
   private weapons: WeaponState = createWeaponState();
   private summons: SummonState = createSummonState();
   private minionVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
+  private minionPositions: Map<string, Phaser.Types.Math.Vector2Like> = new Map();
   private routeEvents: RouteEventState = createRouteEventState();
+  private routeForks: RouteFork[] = createRouteForkState();
+  private routeModifier: RouteModifier = 'balanced';
   private boss: BossState = createBossState();
   private bossStarted = false;
   private results: RunResults = createRunResults();
@@ -430,6 +444,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (this.forkSelecting) {
+      this.updateForkInput();
+      return;
+    }
+
+    this.checkRouteForks();
     this.handleBuildModeToggle();
 
     this.elapsedSeconds += deltaSeconds;
@@ -520,6 +540,10 @@ export class GameScene extends Phaser.Scene {
     for (const visual of this.minionVisuals.values()) visual.destroy(true);
     this.minionVisuals.clear();
     this.routeEvents = createRouteEventState();
+    this.routeForks = createRouteForkState();
+    this.routeModifier = 'balanced';
+    this.forkSelecting = false;
+    this.hideForkOverlay();
     this.boss = createBossState();
     this.bossStarted = false;
     this.results = createRunResults();
@@ -1274,7 +1298,10 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateSpawning(deltaSeconds: number): void {
-    const result = updateWaveState(this.waveState, deltaSeconds);
+    // Route modifier affects wave pace: combat-heavy = faster waves, resource-rich = slower
+    const paceMult = this.routeModifier === 'combat-heavy' ? 1.3 : this.routeModifier === 'resource-rich' ? 0.75 : 1;
+    const adjustedDelta = deltaSeconds * paceMult;
+    const result = updateWaveState(this.waveState, adjustedDelta);
     this.waveState = result.state;
 
     if (result.startedWave && this.waveState.currentWave !== this.lastWaveAnnounced) {
@@ -1759,7 +1786,8 @@ export class GameScene extends Phaser.Scene {
       const isArrowType = tower.type === 'arrow';
       const baseDamage = definition.damage;
       const towerDmgBonus = isArrowType ? this.stats.towerDamage : 0;
-      const damage = (baseDamage + towerDmgBonus) * adjacency.damageMultiplier;
+      const aliveMinionBonus = this.summons.minions.length * this.stats.summonAliveTowerDamage;
+      const damage = (baseDamage + towerDmgBonus + aliveMinionBonus) * adjacency.damageMultiplier;
       const towerReloadMult = isArrowType ? this.stats.towerFireInterval / 0.55 : this.stats.catapultFireInterval / 1.8;
       const interval = Math.max(0.15, definition.fireInterval * adjacency.fireIntervalMultiplier * towerReloadMult);
 
@@ -2016,11 +2044,18 @@ export class GameScene extends Phaser.Scene {
     const overlay = this.add.container(640, 360);
     overlay.setScrollFactor(0);
     overlay.setDepth(OVERLAY_DEPTH + 22);
-    overlay.add(this.add.rectangle(0, 0, 1280, 720, 0x0a0805, 0.72));
     overlay.add(this.add.rectangle(0, 0, 680, 420, 0x2a2018, 0.96).setStrokeStyle(2, 0x8a7a58, 0.7));
     overlay.add(this.add.text(0, -170, '商店', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '30px', fontStyle: 'bold',
     }).setOrigin(0.5));
+
+    // Full-screen backdrop placed in scene (not container) so buttons below can receive clicks
+    const backdrop = this.add.rectangle(640, 360, 1280, 720, 0x0a0805, 0.72)
+      .setScrollFactor(0)
+      .setDepth(OVERLAY_DEPTH + 21)
+      .setInteractive();
+    backdrop.on('pointerover', () => {}); // absorb clicks, preventing them from reaching game objects
+    this.shopOverlayBg = backdrop;
 
     // Shop buttons placed directly in scene (Container children can't receive pointer events)
     const shopButtons: Phaser.GameObjects.Rectangle[] = [];
@@ -2031,6 +2066,8 @@ export class GameScene extends Phaser.Scene {
         .setScrollFactor(0)
         .setDepth(OVERLAY_DEPTH + 23)
         .setInteractive({ useHandCursor: true });
+      button.on('pointerover', () => button.setFillStyle(0x4a4030, 1));
+      button.on('pointerout', () => button.setFillStyle(0x3a3020, 1));
       button.on('pointerdown', () => this.buyShopItem(item.id));
       shopButtons.push(button);
       shopTexts.push(this.add.text(390, y - 7, item.name, { color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px' }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
@@ -2058,6 +2095,7 @@ export class GameScene extends Phaser.Scene {
 
   private hideShopOverlay(): void {
     if (this.shopOverlay) { this.shopOverlay.destroy(true); this.shopOverlay = undefined; }
+    if (this.shopOverlayBg) { this.shopOverlayBg.destroy(); this.shopOverlayBg = undefined; }
     for (const b of this.shopOverlayButtons) b.destroy();
     this.shopOverlayButtons = [];
     for (const t of this.shopOverlayTexts) t.destroy();
@@ -2135,9 +2173,58 @@ export class GameScene extends Phaser.Scene {
       const definition = getWeaponDefinition(weapon.type);
       if (!definition) return weapon;
       const effectiveRange = definition.range + weapon.rangeBonus + this.stats.weaponRangeBonus;
+      const damage = Math.round(definition.damage * weapon.damageMultiplier * this.stats.weaponDamageMultiplier);
+      const cooldown = definition.cooldown * weapon.cooldownMultiplier * this.stats.weaponCooldownMultiplier;
+
+      // AOE weapon (saw): hit all enemies in range
+      if (definition.aoe) {
+        let hitAny = false;
+        for (const enemy of [...this.enemies]) {
+          if (distanceSquared(this.playerPosition, enemy.position) <= effectiveRange ** 2) {
+            const result = applyDamage(enemy.health, damage);
+            enemy.health = result.health;
+            this.showDamageNumber(enemy.position.x, enemy.position.y - (enemy as any).radius - 10, damage);
+            this.results = addHeroDamage(this.results, damage);
+            if (result.dead) this.removeEnemy(enemy);
+            hitAny = true;
+          }
+        }
+        if (hitAny) {
+          this.drawWeaponProjectile(weapon.type, this.playerPosition, this.playerPosition);
+          return { ...weapon, cooldownTimer: cooldown };
+        }
+        return weapon;
+      }
+
+      // Piercing weapon (drill): hit multiple enemies in a line
+      if (definition.pierceCount && definition.pierceCount > 1) {
+        const target = selectNearestTarget(this.playerPosition, this.enemies, effectiveRange);
+        if (!target) return weapon;
+        // Hit enemies along the line from player to target, up to pierceCount
+        const hitIds = new Set<string>();
+        let hits = 0;
+        const sorted = [...this.enemies].sort(
+          (a, b) => distanceSquared(this.playerPosition, a.position) - distanceSquared(this.playerPosition, b.position),
+        );
+        for (const enemy of sorted) {
+          if (hits >= definition.pierceCount) break;
+          if (distanceSquared(this.playerPosition, enemy.position) <= effectiveRange ** 2) {
+            const result = applyDamage(enemy.health, damage);
+            enemy.health = result.health;
+            this.showDamageNumber(enemy.position.x, enemy.position.y - (enemy as any).radius - 10, damage);
+            this.results = addHeroDamage(this.results, damage);
+            if (result.dead) this.removeEnemy(enemy);
+            hitIds.add(enemy.id);
+            hits++;
+          }
+        }
+        this.drawWeaponProjectile(weapon.type, this.playerPosition, target.position);
+        return { ...weapon, cooldownTimer: cooldown };
+      }
+
+      // Default: single target (axe, ritual-dagger)
       const target = selectNearestTarget(this.playerPosition, this.enemies, effectiveRange);
       if (!target) return weapon;
-      const damage = Math.round(definition.damage * weapon.damageMultiplier * this.stats.weaponDamageMultiplier);
       const result = applyDamage(target.health, damage);
       (target as any).health = result.health;
       this.showDamageNumber(target.position.x, target.position.y - (target as any).radius - 10, damage);
@@ -2150,7 +2237,6 @@ export class GameScene extends Phaser.Scene {
         this.removeEnemy(target as any);
       }
       this.drawWeaponProjectile(weapon.type, this.playerPosition, target.position);
-      const cooldown = definition.cooldown * weapon.cooldownMultiplier * this.stats.weaponCooldownMultiplier;
       return { ...weapon, cooldownTimer: cooldown };
     });
   }
@@ -2165,11 +2251,18 @@ export class GameScene extends Phaser.Scene {
       visual.add(this.add.circle(0, 0, minion.type === 'bomber' ? 7 : 6, minion.type === 'bomber' ? 0xffa726 : 0x9dd6a3));
       visual.add(this.add.text(0, -12, definition.name[0], { color: '#102010', fontFamily: 'Arial', fontSize: '9px' }).setOrigin(0.5));
       this.minionVisuals.set(minion.id, visual);
+      this.minionPositions.set(minion.id, { ...minion.position });
     }
   }
 
   private updateMinions(deltaSeconds: number): void {
     this.summons = updateMinionLifetime(this.summons, deltaSeconds);
+    const synergy = {
+      deathExplosionBonus: this.stats.summonDeathExplosionBonus,
+      deathResourceChance: this.stats.summonDeathResourceChance,
+      deathResourceType: 'gold' as const,
+      explosionRadiusMult: 1.5,
+    };
     for (const minion of this.summons.minions) {
       const definition = getMinionDefinition(minion.type);
       if (!definition) continue;
@@ -2181,38 +2274,83 @@ export class GameScene extends Phaser.Scene {
         minion.position.x += (dx / length) * definition.speed * deltaSeconds;
         minion.position.y += (dy / length) * definition.speed * deltaSeconds;
         if (distanceSquared(minion.position, target.position) <= definition.attackRange ** 2) {
-          const result = applyDamage(target.health, definition.damage * this.summons.damageMultiplier * this.stats.summonDamageMultiplier);
+          const dmg = definition.damage * this.summons.damageMultiplier * this.stats.summonDamageMultiplier * this.stats.summonGlobalDamageMultiplier;
+          const result = applyDamage(target.health, dmg);
           (target as any).health = result.health;
           if (result.dead) this.removeEnemy(target as any);
-          if (minion.type === 'bomber') this.detonateMinion(minion.id);
+          if (minion.type === 'bomber') this.detonateMinion(minion.id, synergy);
         }
       }
       this.minionVisuals.get(minion.id)?.setPosition(minion.position.x, minion.position.y);
+      this.minionPositions.set(minion.id, { ...minion.position });
     }
-    this.cleanupMissingMinionVisuals();
+    this.cleanupMissingMinionVisuals(synergy);
   }
 
-  private cleanupMissingMinionVisuals(): void {
+  private cleanupMissingMinionVisuals(synergy?: {
+    deathExplosionBonus: number;
+    deathResourceChance: number;
+    deathResourceType: 'gold';
+    explosionRadiusMult: number;
+  }): void {
     const activeIds = new Set(this.summons.minions.map((m) => m.id));
     for (const [id, visual] of this.minionVisuals) {
-      if (!activeIds.has(id)) { visual.destroy(true); this.minionVisuals.delete(id); }
+      if (!activeIds.has(id)) {
+        // Apply synergy death effects for non-bomber minions that expired
+        if (synergy && synergy.deathExplosionBonus > 0) {
+          const pos = this.minionPositions.get(id);
+          const radius = Math.round(36 * synergy.explosionRadiusMult);
+          if (pos) {
+            this.drawSplashCircle(pos, radius);
+            for (const enemy of [...this.enemies]) {
+              if (distanceSquared(enemy.position, pos) <= radius ** 2) {
+                const dmg = applyDamage(enemy.health, synergy.deathExplosionBonus);
+                enemy.health = dmg.health;
+                if (dmg.dead) this.removeEnemy(enemy);
+              }
+            }
+          }
+        }
+        if (synergy && synergy.deathResourceChance > 0 && Math.random() < synergy.deathResourceChance) {
+          this.wallet = { ...this.wallet, gold: this.wallet.gold + 1 };
+          const pos = this.minionPositions.get(id);
+          if (pos) this.showFloatingResource(pos.x, pos.y, '+1 金', '#d4a843');
+        }
+        this.minionVisuals.delete(id);
+        this.minionPositions.delete(id);
+        visual.destroy(true);
+      }
     }
   }
 
-  private detonateMinion(minionId: string): void {
-    const result = killMinion(this.summons, minionId);
+  private detonateMinion(
+    minionId: string,
+    synergy?: {
+      deathExplosionBonus: number;
+      deathResourceChance: number;
+      deathResourceType: 'gold';
+      explosionRadiusMult: number;
+    },
+  ): void {
+    const result = killMinion(this.summons, minionId, synergy);
     this.summons = result.state;
     for (const effect of result.effects) {
-      this.drawSplashCircle(effect.position, effect.radius);
-      for (const enemy of [...this.enemies]) {
-        if (distanceSquared(enemy.position, effect.position) <= effect.radius ** 2) {
-          const damage = applyDamage(enemy.health, effect.damage);
-          enemy.health = damage.health;
-          if (damage.dead) this.removeEnemy(enemy);
+      if (effect.type === 'explosion') {
+        this.drawSplashCircle(effect.position, effect.radius);
+        for (const enemy of [...this.enemies]) {
+          if (distanceSquared(enemy.position, effect.position) <= effect.radius ** 2) {
+            const damage = applyDamage(enemy.health, effect.damage);
+            enemy.health = damage.health;
+            if (damage.dead) this.removeEnemy(enemy);
+          }
         }
+      } else if (effect.type === 'resource-drop') {
+        this.wallet = { ...this.wallet, [effect.resource]: this.wallet[effect.resource] + effect.amount };
+        const label = effect.resource === 'gold' ? `+${effect.amount} 金` : `+${effect.amount}`;
+        this.showFloatingResource(effect.position.x, effect.position.y, label, '#d4a843');
       }
     }
-    this.cleanupMissingMinionVisuals();
+    this.cleanupMissingMinionVisuals(synergy);
   }
 
   private createInitialRewardCircles(): void {
@@ -2433,12 +2571,18 @@ export class GameScene extends Phaser.Scene {
     // Upgrade cards placed directly in scene (Container children can't receive pointer events)
     this.upgradeChoices.forEach((choice, index) => {
       const y = 310 + index * 100;
-      const card = this.add.rectangle(640, y, 600, 76, 0x3a3020, 1)
+      const rarityColors: Record<string, { border: number; text: string; bg: number }> = {
+        common: { border: 0x5a4a38, text: '#8a7a68', bg: 0x3a3020 },
+        rare: { border: 0x4a90d9, text: '#6ab4f7', bg: 0x1a2a40 },
+        epic: { border: 0x9b59b6, text: '#c39bd3', bg: 0x2a1a30 },
+      };
+      const rc = rarityColors[choice.rarity] ?? rarityColors.common;
+      const card = this.add.rectangle(640, y, 600, 76, rc.bg, 1)
         .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21)
         .setInteractive({ useHandCursor: true });
-      card.setStrokeStyle(1, 0x5a4a38, 0.6);
-      card.on('pointerover', () => { card.setStrokeStyle(2, 0x8a7a58, 1); card.setFillStyle(0x4a4030, 1); });
-      card.on('pointerout', () => { card.setStrokeStyle(1, 0x5a4a38, 0.6); card.setFillStyle(0x3a3020, 1); });
+      card.setStrokeStyle(2, rc.border, 1);
+      card.on('pointerover', () => { card.setStrokeStyle(2, 0xd4a843, 1); });
+      card.on('pointerout', () => { card.setStrokeStyle(2, rc.border, 1); card.setFillStyle(rc.bg, 1); });
       card.on('pointerdown', () => { if (this.upgradeInputCooldown <= 0) this.selectUpgrade(index); });
       this.upgradeCards.push(card);
 
@@ -2446,8 +2590,12 @@ export class GameScene extends Phaser.Scene {
         color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
+      const rarityLabel = this.add.text(900, y - 14, choice.rarity === 'epic' ? '史诗' : choice.rarity === 'rare' ? '稀有' : '', {
+        color: rc.text, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
+
       const name = this.add.text(400, y - 14, choice.name, {
-        color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '20px',
+        color: choice.rarity === 'common' ? '#e0d8c8' : rc.text, fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '20px',
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
       const desc = this.add.text(400, y + 10, choice.description, {
@@ -2455,7 +2603,7 @@ export class GameScene extends Phaser.Scene {
         wordWrap: { width: 520 },
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
-      this.upgradeTexts.push(icon, name, desc);
+      this.upgradeTexts.push(icon, name, desc, rarityLabel);
     });
 
     this.upgradeOverlay = overlay;
@@ -2492,6 +2640,109 @@ export class GameScene extends Phaser.Scene {
     this.updateTowerRangeVisuals();
     this.updateHudPanels();
     this.tryOpenUpgradeChoices();
+  }
+
+  // ═══════════════════════════════════════════════════
+  // ROUTE FORKS
+  // ═══════════════════════════════════════════════════
+
+  private checkRouteForks(): void {
+    const caravanX = getCaravanCenter(this.caravanTopLeft).x;
+    for (const fork of this.routeForks) {
+      if (!fork.triggered && caravanX >= fork.triggerDistance) {
+        fork.triggered = true;
+        this.currentFork = fork;
+        this.forkChoices = [fork.choiceA, fork.choiceB];
+        this.forkSelecting = true;
+        this.showForkOverlay();
+        return;
+      }
+    }
+  }
+
+  private updateForkInput(): void {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) { this.selectFork(0); }
+    else if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) { this.selectFork(1); }
+  }
+
+  private showForkOverlay(): void {
+    this.hideForkOverlay();
+    const fork = this.currentFork;
+    if (!fork) return;
+
+    // Backdrop in container for easy cleanup
+    this.forkOverlay = this.add.container(0, 0);
+    this.forkOverlay.setScrollFactor(0);
+    this.forkOverlay.setDepth(OVERLAY_DEPTH + 23);
+
+    this.forkOverlay.add(this.add.rectangle(640, 360, 1280, 720, 0x0a0805, 0.8)
+      .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 24));
+    this.forkOverlay.add(this.add.rectangle(640, 260, 600, 200, 0x2a2018, 0.96)
+      .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 24)
+      .setStrokeStyle(2, 0x8a7a58, 0.7));
+
+    // Title & buttons directly in scene (Container children can't receive pointer events
+    // and their depth is clamped to container depth)
+    this.add.text(640, 195, '分岔路口', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '28px', fontStyle: 'bold',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 26);
+
+    const forkButtons: Phaser.GameObjects.Rectangle[] = [];
+    const forkTexts: Phaser.GameObjects.Text[] = [];
+    const buttonWidth = 260;
+    const gap = 40;
+    const leftX = 640 - buttonWidth / 2 - gap / 2;
+    const rightX = 640 + buttonWidth / 2 + gap / 2;
+    const buttonY = 260;
+
+    [fork.choiceA, fork.choiceB].forEach((choice, i) => {
+      const x = i === 0 ? leftX : rightX;
+      const btn = this.add.rectangle(x, buttonY, buttonWidth, 120, 0x3a3020, 1)
+        .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 25)
+        .setInteractive({ useHandCursor: true });
+      btn.on('pointerover', () => btn.setFillStyle(0x4a4030, 1));
+      btn.on('pointerout', () => btn.setFillStyle(0x3a3020, 1));
+      btn.on('pointerdown', () => this.selectFork(i));
+      forkButtons.push(btn);
+
+      forkTexts.push(this.add.text(x, buttonY - 35, `${i + 1}. ${choice.label}`, {
+        color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '18px', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 25));
+
+      forkTexts.push(this.add.text(x, buttonY, choice.description, {
+        color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '14px',
+        wordWrap: { width: buttonWidth - 20 }, align: 'center',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 25));
+    });
+
+    this.forkButtons = forkButtons;
+    this.forkTexts = forkTexts;
+  }
+
+  private hideForkOverlay(): void {
+    if (this.forkOverlay) { this.forkOverlay.destroy(true); this.forkOverlay = undefined; }
+    for (const b of this.forkButtons) b.destroy();
+    this.forkButtons = [];
+    for (const t of this.forkTexts) t.destroy();
+    this.forkTexts = [];
+  }
+
+  private selectFork(index: number): void {
+    if (!this.forkSelecting || !this.currentFork) return;
+    const choice = this.forkChoices[index];
+    this.currentFork.chosen = choice;
+    this.routeModifier = choice.modifier;
+    this.showFeedback(`选择了${choice.label}`, '#d4a843');
+    this.forkSelecting = false;
+    this.currentFork = undefined;
+    this.hideForkOverlay();
+    this.updateHudPanels();
+  }
+
+  private applyRouteModifier(enemyBudget: number): number {
+    if (this.routeModifier === 'combat-heavy') return Math.round(enemyBudget * 1.4);
+    if (this.routeModifier === 'resource-rich') return Math.round(enemyBudget * 0.7);
+    return enemyBudget;
   }
 
   // ═══════════════════════════════════════════════════
@@ -2959,6 +3210,14 @@ export class GameScene extends Phaser.Scene {
     this.carriedText.setOrigin(0.5);
     this.resourcePanel.add(this.carriedText);
 
+    // Route indicator (below resource panel)
+    this.routeIndicatorText = this.add.text(1190, 62, '平衡路线', {
+      color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '10px',
+    });
+    this.routeIndicatorText.setOrigin(0.5, 0);
+    this.routeIndicatorText.setScrollFactor(0);
+    this.routeIndicatorText.setDepth(OVERLAY_DEPTH + 5);
+
     // Shop button (left of resource panel)
     const shopBtn = this.add.rectangle(1072, 18, 52, 28, 0x3a3020, 1)
       .setScrollFactor(0).setDepth(OVERLAY_DEPTH + 6).setInteractive({ useHandCursor: true });
@@ -3012,6 +3271,22 @@ export class GameScene extends Phaser.Scene {
     if (this.walletText && this.carriedText) {
       this.walletText.setText(`木 ${Math.floor(this.wallet.wood)}  石 ${Math.floor(this.wallet.stone)}  金 ${Math.floor(this.wallet.gold)}`);
       this.carriedText.setText(`携带：木${Math.floor(this.carried.wood)} 石${Math.floor(this.carried.stone)} 金${Math.floor(this.carried.gold)}`);
+    }
+
+    // Route indicator
+    if (this.routeIndicatorText) {
+      const routeLabels: Record<RouteModifier, string> = {
+        balanced: '平衡路线',
+        'combat-heavy': '烈焰路线 — 敌人 +40%',
+        'resource-rich': '幽谷路线 — 资源更丰富',
+      };
+      const routeColors: Record<RouteModifier, string> = {
+        balanced: '#8a7a68',
+        'combat-heavy': '#ff6b6b',
+        'resource-rich': '#69db7c',
+      };
+      this.routeIndicatorText.setText(routeLabels[this.routeModifier]);
+      this.routeIndicatorText.setColor(routeColors[this.routeModifier]);
     }
 
     // Lightweight card affordability refresh (no destruction)
@@ -3142,11 +3417,34 @@ export class GameScene extends Phaser.Scene {
 
     // Interactive — placed directly in scene, not in container
     panelBg.setInteractive({ useHandCursor: true });
+    const pulseTween = canAffordThis && !isSelected
+      ? this.tweens.add({
+          targets: panelBg,
+          strokeAlpha: 1,
+          duration: 700,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      : null;
+
     panelBg.on('pointerover', () => {
-      if (this.selectedCardIndex !== index) panelBg.setFillStyle(0x4a4030, 1);
+      if (this.selectedCardIndex === index) return;
+      panelBg.setData('isHovered', true);
+      if (pulseTween) pulseTween.pause();
+      if (canAffordThis) {
+        panelBg.setFillStyle(0x4a4030, 1);
+        panelBg.setStrokeStyle(2, 0xd4a843, 1);
+      } else {
+        panelBg.setFillStyle(0x2a2518, 0.7);
+      }
     });
     panelBg.on('pointerout', () => {
-      if (this.selectedCardIndex !== index) panelBg.setFillStyle(bgColor, bgAlpha);
+      if (this.selectedCardIndex === index) return;
+      panelBg.setData('isHovered', false);
+      panelBg.setFillStyle(bgColor, bgAlpha);
+      panelBg.setStrokeStyle(strokeWidth, strokeColor, strokeAlpha);
+      if (pulseTween) pulseTween.resume();
     });
     panelBg.on('pointerdown', () => {
       if (!canBuild(this.wallet, type)) return;
@@ -3156,19 +3454,6 @@ export class GameScene extends Phaser.Scene {
         this.selectCard(index);
       }
     });
-
-    // Pulse animation for affordable, non-selected cards
-    if (canAffordThis && !isSelected) {
-      const pulse = this.tweens.add({
-        targets: panelBg,
-        strokeAlpha: 1,
-        duration: 700,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-      panelBg.setData('pulseTween', pulse);
-    }
 
     const def = BUILDING_DEFINITIONS[type];
     const label = this.add.text(x, y - 12, `${def.shortLabel} ${def.name}`, {
@@ -3198,9 +3483,10 @@ export class GameScene extends Phaser.Scene {
 
     this.cardHand.forEach((type, index) => {
       if (index >= this.cardPanels.length) return;
+      const panelBg = this.cardPanels[index];
+      if (panelBg.getData('isHovered')) return; // skip hovered card
       const canAffordThis = canBuild(this.wallet, type);
       const isSelected = index === this.selectedCardIndex;
-      const panelBg = this.cardPanels[index];
       const label = this.cardLabels[index];
       const cost = this.cardCosts[index];
 

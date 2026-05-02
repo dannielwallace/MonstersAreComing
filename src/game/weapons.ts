@@ -9,6 +9,10 @@ export interface WeaponDefinition {
   hitCount: number;
   createsMinionOnKill?: boolean;
   harvestMultiplier?: number;
+  /** If true, hits ALL enemies in range (AOE cone) */
+  aoe?: boolean;
+  /** If > 1, hits that many enemies in a line (pierce) */
+  pierceCount?: number;
 }
 
 export interface OwnedWeapon {
@@ -31,9 +35,9 @@ export interface WeaponUpgrade {
 
 export const WEAPON_DEFINITIONS: Record<WeaponType, WeaponDefinition> = {
   axe: { type: 'axe', name: '斧头', range: 56, damage: 8, cooldown: 0.6, hitCount: 3, harvestMultiplier: 1.2 },
-  saw: { type: 'saw', name: '旋锯', range: 80, damage: 5, cooldown: 0.35, hitCount: 6, harvestMultiplier: 1.8 },
+  saw: { type: 'saw', name: '旋锯', range: 80, damage: 5, cooldown: 0.35, hitCount: 6, harvestMultiplier: 1.8, aoe: true },
   'ritual-dagger': { type: 'ritual-dagger', name: '仪式弹', range: 160, damage: 7, cooldown: 0.7, hitCount: 1, createsMinionOnKill: true },
-  drill: { type: 'drill', name: '钻头', range: 110, damage: 14, cooldown: 0.9, hitCount: 2, harvestMultiplier: 2.2 },
+  drill: { type: 'drill', name: '钻头', range: 110, damage: 14, cooldown: 0.9, hitCount: 2, harvestMultiplier: 2.2, pierceCount: 3 },
 };
 
 export function getWeaponDefinition(type: string): WeaponDefinition | undefined {
