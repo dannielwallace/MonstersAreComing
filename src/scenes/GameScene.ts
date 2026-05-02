@@ -2959,8 +2959,6 @@ export class GameScene extends Phaser.Scene {
     } else {
       // Not blocked — move forward
       this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
-      // Auto-harvest nodes the caravan passes through
-      this.autoHarvestCaravanNodes();
     }
 
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
@@ -3013,32 +3011,6 @@ export class GameScene extends Phaser.Scene {
     const nodeLeft = node.position.x - node.radius;
     const verticalOverlap = Math.abs(node.position.y - caravanCenterY) < caravanHalf + node.radius;
     return verticalOverlap && nodeLeft < caravanFront && nodeLeft > caravanFront - caravanHalf - 5;
-  }
-
-  /** Auto-harvest resource nodes that the caravan body overlaps with */
-  private autoHarvestCaravanNodes(): void {
-    const caravanLeft = this.caravanTopLeft.x;
-    const caravanRight = this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE;
-    const caravanTop = this.caravanTopLeft.y;
-    const caravanBottom = this.caravanTopLeft.y + CARAVAN_GRID_SIZE * CELL_SIZE;
-
-    for (const nodes of [this.resourceSpawner.woodNodes, this.resourceSpawner.stoneNodes, this.resourceSpawner.goldNodes]) {
-      for (const node of [...nodes]) {
-        if (node.remaining <= 0) continue;
-        const nodeLeft = node.position.x - node.radius;
-        const nodeRight = node.position.x + node.radius;
-        const nodeTop = node.position.y - node.radius;
-        const nodeBottom = node.position.y + node.radius;
-        // Check bounding box overlap
-        if (nodeRight > caravanLeft && nodeLeft < caravanRight && nodeBottom > caravanTop && nodeTop < caravanBottom) {
-          const result = harvestNode(node, node.remaining, 1);
-          node.remaining = result.node.remaining;
-          this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
-          if (result.gathered.type === 'wood') this.totalWoodGathered += result.gathered.amount;
-          else if (result.gathered.type === 'stone') this.totalStoneGathered += result.gathered.amount;
-        }
-      }
-    }
   }
 
   // ═══════════════════════════════════════════════════
