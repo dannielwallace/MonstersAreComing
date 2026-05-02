@@ -156,7 +156,7 @@ const CARAVAN_BLOCK_RANGE = 56;
 const ENEMY_SEPARATION_DIST = 18;
 const TOWER_BLOCK_RANGE = 20;
 /** Threshold for obstacle in front of caravan to block movement (from caravan front edge) */
-const CARAVAN_OBSTACLE_THRESHOLD = 20;
+const CARAVAN_OBSTACLE_THRESHOLD = 5;
 const SCREEN_SHAKE_INTENSITY = 0.004;
 const SCREEN_SHAKE_DURATION = 120;
 
@@ -2915,26 +2915,23 @@ export class GameScene extends Phaser.Scene {
     // ── Obstacle check: stop if something is in front of the caravan ──
     const caravanHalf = (CARAVAN_GRID_SIZE * CELL_SIZE) / 2; // 48
     const caravanFront = this.caravanTopLeft.x + caravanHalf * 2; // right edge
-    const caravanTop = this.caravanTopLeft.y;
-    const caravanBottom = this.caravanTopLeft.y + caravanHalf * 2;
-    const caravanCenterY = caravanTop + caravanHalf;
+    const caravanCenterY = this.caravanTopLeft.y + caravanHalf;
 
-    // Check enemies
+    // Check enemies — use actual position, not slot positions
     let blocked = false;
     for (const enemy of this.enemies) {
-      const dx = enemy.position.x - caravanFront;
-      const dy = Math.abs(enemy.position.y - caravanCenterY);
-      if (dx > -CARAVAN_OBSTACLE_THRESHOLD && dx < caravanHalf + CARAVAN_OBSTACLE_THRESHOLD
-          && dy < caravanHalf + enemy.radius) {
+      const enemyLeft = enemy.position.x - enemy.radius;
+      if (enemyLeft < caravanFront && enemyLeft > caravanFront - caravanHalf - 5
+          && Math.abs(enemy.position.y - caravanCenterY) < caravanHalf + enemy.radius) {
         blocked = true;
         break;
       }
     }
 
-    // Check resource nodes (wood, stone, gold)
+    // Check resource nodes — only block when node's bounding box reaches caravan body
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
         }
@@ -2942,7 +2939,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
         }
@@ -2950,7 +2947,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
-        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
         }
@@ -2962,6 +2959,8 @@ export class GameScene extends Phaser.Scene {
     } else {
       // Not blocked — move forward
       this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
+      // Auto-harvest nodes the caravan passes through
+      this.autoHarvestCaravanNodes();
     }
 
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
@@ -3008,14 +3007,38 @@ export class GameScene extends Phaser.Scene {
   private isNodeBlockingCaravan(
     node: ResourceNode,
     caravanFront: number,
-    caravanTop: number,
-    caravanBottom: number,
+    caravanCenterY: number,
     caravanHalf: number,
   ): boolean {
-    const dx = node.position.x - caravanFront;
-    const dy = Math.abs(node.position.y - (caravanTop + caravanHalf));
-    return dx > -CARAVAN_OBSTACLE_THRESHOLD && dx < caravanHalf + CARAVAN_OBSTACLE_THRESHOLD
-      && dy < caravanHalf + node.radius;
+    const nodeLeft = node.position.x - node.radius;
+    const verticalOverlap = Math.abs(node.position.y - caravanCenterY) < caravanHalf + node.radius;
+    return verticalOverlap && nodeLeft < caravanFront && nodeLeft > caravanFront - caravanHalf - 5;
+  }
+
+  /** Auto-harvest resource nodes that the caravan body overlaps with */
+  private autoHarvestCaravanNodes(): void {
+    const caravanLeft = this.caravanTopLeft.x;
+    const caravanRight = this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE;
+    const caravanTop = this.caravanTopLeft.y;
+    const caravanBottom = this.caravanTopLeft.y + CARAVAN_GRID_SIZE * CELL_SIZE;
+
+    for (const nodes of [this.resourceSpawner.woodNodes, this.resourceSpawner.stoneNodes, this.resourceSpawner.goldNodes]) {
+      for (const node of [...nodes]) {
+        if (node.remaining <= 0) continue;
+        const nodeLeft = node.position.x - node.radius;
+        const nodeRight = node.position.x + node.radius;
+        const nodeTop = node.position.y - node.radius;
+        const nodeBottom = node.position.y + node.radius;
+        // Check bounding box overlap
+        if (nodeRight > caravanLeft && nodeLeft < caravanRight && nodeBottom > caravanTop && nodeTop < caravanBottom) {
+          const result = harvestNode(node, node.remaining, 1);
+          node.remaining = result.node.remaining;
+          this.carried = addCarriedResource(this.carried, result.gathered.type, result.gathered.amount);
+          if (result.gathered.type === 'wood') this.totalWoodGathered += result.gathered.amount;
+          else if (result.gathered.type === 'stone') this.totalStoneGathered += result.gathered.amount;
+        }
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════
