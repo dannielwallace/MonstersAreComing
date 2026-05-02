@@ -2979,8 +2979,8 @@ export class GameScene extends Phaser.Scene {
       this.weaponIcon.removeAll(true);
       return;
     }
-    // Show first ready weapon (or the only one)
-    const active = owned.find((w) => w.cooldownTimer <= 0) ?? owned[0];
+    // Show most recently acquired weapon (last in array)
+    const active = owned[owned.length - 1];
     const def = WEAPON_DEFINITIONS[active.type];
     if (!def) return;
     const effectiveDmg = Math.round(def.damage * active.damageMultiplier * this.stats.weaponDamageMultiplier);
