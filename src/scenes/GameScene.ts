@@ -2911,73 +2911,76 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    // ── Obstacle check: stop if something blocks the caravan body or placed buildings ──
-    // Collect bounding boxes for the caravan body and all placed buildings
-    type Rect = { left: number; right: number; top: number; bottom: number };
-    const hitBoxes: Rect[] = [];
+    // ── Obstacle check: only blocks movement if obstacle is in FRONT of the caravan ──
+    // Caravan moves right, so only check obstacles ahead of the caravan's right edge
+    const caravanRight = this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE;
+    const caravanTop = this.caravanTopLeft.y;
+    const caravanBottom = this.caravanTopLeft.y + CARAVAN_GRID_SIZE * CELL_SIZE;
+    const caravanLeft = this.caravanTopLeft.x;
 
-    // Caravan body bounding box
-    hitBoxes.push({
-      left: this.caravanTopLeft.x,
-      right: this.caravanTopLeft.x + CARAVAN_GRID_SIZE * CELL_SIZE,
-      top: this.caravanTopLeft.y,
-      bottom: this.caravanTopLeft.y + CARAVAN_GRID_SIZE * CELL_SIZE,
-    });
-
-    // Placed buildings bounding boxes
+    // Determine if any placed building extends the caravan's right edge
     const occupiedSlotIds = this.getOccupiedSlotIds();
+    let effectiveRight = caravanRight;
+    let effectiveTop = caravanTop;
+    let effectiveBottom = caravanBottom;
     for (const slot of GRID_BUILD_SLOTS) {
       if (!occupiedSlotIds.has(slot.id)) continue;
-      hitBoxes.push({
-        left: this.caravanTopLeft.x + slot.gridOffset.col * CELL_SIZE,
-        right: this.caravanTopLeft.x + (slot.gridOffset.col + 1) * CELL_SIZE,
-        top: this.caravanTopLeft.y + slot.gridOffset.row * CELL_SIZE,
-        bottom: this.caravanTopLeft.y + (slot.gridOffset.row + 1) * CELL_SIZE,
-      });
+      const slotRight = caravanLeft + (slot.gridOffset.col + 1) * CELL_SIZE;
+      const slotTop = this.caravanTopLeft.y + slot.gridOffset.row * CELL_SIZE;
+      const slotBottom = this.caravanTopLeft.y + (slot.gridOffset.row + 1) * CELL_SIZE;
+      if (slotRight > effectiveRight) effectiveRight = slotRight;
+      if (slotTop < effectiveTop) effectiveTop = slotTop;
+      if (slotBottom > effectiveBottom) effectiveBottom = slotBottom;
     }
 
     let blocked = false;
 
-    // Check enemies against all hitboxes
+    // Check enemies: is any enemy blocking the path to the right?
     for (const enemy of this.enemies) {
-      for (const box of hitBoxes) {
-        if (enemy.position.x + enemy.radius > box.left
-            && enemy.position.x - enemy.radius < box.right
-            && enemy.position.y + enemy.radius > box.top
-            && enemy.position.y - enemy.radius < box.bottom) {
+      const eLeft = enemy.position.x - enemy.radius;
+      const eRight = enemy.position.x + enemy.radius;
+      const eTop = enemy.position.y - enemy.radius;
+      const eBottom = enemy.position.y + enemy.radius;
+      // Enemy blocks if it overlaps with the forward-facing edge of the caravan+buildings
+      if (eLeft < effectiveRight + 2
+          && eRight > effectiveRight - 5
+          && eBottom > effectiveTop
+          && eTop < effectiveBottom) {
+        blocked = true;
+        break;
+      }
+    }
+
+    // Check resource nodes: is any non-depleted node blocking the path?
+    if (!blocked) {
+      for (const node of this.resourceSpawner.woodNodes) {
+        if (this.isNodeInFront(node, effectiveRight, effectiveTop, effectiveBottom)) {
           blocked = true;
           break;
         }
       }
-      if (blocked) break;
     }
-
-    // Check resource nodes against all hitboxes
     if (!blocked) {
-      const allNodes = [
-        ...this.resourceSpawner.woodNodes,
-        ...this.resourceSpawner.stoneNodes,
-        ...this.resourceSpawner.goldNodes,
-      ];
-      for (const node of allNodes) {
-        if (node.remaining <= 0) continue;
-        for (const box of hitBoxes) {
-          if (node.position.x + node.radius > box.left
-              && node.position.x - node.radius < box.right
-              && node.position.y + node.radius > box.top
-              && node.position.y - node.radius < box.bottom) {
-            blocked = true;
-            break;
-          }
+      for (const node of this.resourceSpawner.stoneNodes) {
+        if (this.isNodeInFront(node, effectiveRight, effectiveTop, effectiveBottom)) {
+          blocked = true;
+          break;
         }
-        if (blocked) break;
+      }
+    }
+    if (!blocked) {
+      for (const node of this.resourceSpawner.goldNodes) {
+        if (this.isNodeInFront(node, effectiveRight, effectiveTop, effectiveBottom)) {
+          blocked = true;
+          break;
+        }
       }
     }
 
     if (blocked) {
-      // Caravan is blocked — stay stopped until obstacle clears
+      // Caravan is blocked — stay stopped
     } else {
-      // Not blocked — move forward
+      // Path is clear — move forward
       this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
     }
 
@@ -3020,6 +3023,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.buildMode) this.updateBuildSlotHighlights();
+  }
+
+  /** Check if a resource node is blocking the caravan's forward movement */
+  private isNodeInFront(
+    node: ResourceNode,
+    effectiveRight: number,
+    effectiveTop: number,
+    effectiveBottom: number,
+  ): boolean {
+    if (node.remaining <= 0) return false;
+    const nLeft = node.position.x - node.radius;
+    const nRight = node.position.x + node.radius;
+    const nTop = node.position.y - node.radius;
+    const nBottom = node.position.y + node.radius;
+    // Node blocks if its left edge is near the caravan's right edge and vertically aligned
+    return nLeft < effectiveRight + 2
+        && nRight > effectiveRight - 5
+        && nBottom > effectiveTop
+        && nTop < effectiveBottom;
   }
 
   // ═══════════════════════════════════════════════════
