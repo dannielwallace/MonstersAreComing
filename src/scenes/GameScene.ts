@@ -2911,46 +2911,45 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    // ── Obstacle check: only check obstacles in the forward (right) direction ──
+    // ── Obstacle check: only obstacles strictly IN FRONT of the right edge block ──
     const moveAmount = CARAVAN_SPEED * deltaSeconds;
 
-    // Compute the caravan+buildings bounding box
-    let left = this.caravanTopLeft.x;
-    let top = this.caravanTopLeft.y;
-    let right = left + CARAVAN_GRID_SIZE * CELL_SIZE;
-    let bottom = top + CARAVAN_GRID_SIZE * CELL_SIZE;
+    // Compute the caravan body bounding box (just the 2x2 caravan, not buildings)
+    const caravanLeft = this.caravanTopLeft.x;
+    const caravanTop = this.caravanTopLeft.y;
+    const caravanRight = caravanLeft + CARAVAN_GRID_SIZE * CELL_SIZE;
+    const caravanBottom = caravanTop + CARAVAN_GRID_SIZE * CELL_SIZE;
 
+    // The forward edge: rightmost point of caravan + any buildings on the front side
+    let forwardEdge = caravanRight;
     const occupiedSlotIds = this.getOccupiedSlotIds();
     for (const slot of GRID_BUILD_SLOTS) {
       if (!occupiedSlotIds.has(slot.id)) continue;
-      const sx = left + slot.gridOffset.col * CELL_SIZE;
-      const sy = top + slot.gridOffset.row * CELL_SIZE;
-      const sRight = sx + CELL_SIZE;
-      const sBottom = sy + CELL_SIZE;
-      if (sx < left) left = sx;
-      if (sy < top) top = sy;
-      if (sRight > right) right = sRight;
-      if (sBottom > bottom) bottom = sBottom;
+      const slotRight = caravanLeft + (slot.gridOffset.col + 1) * CELL_SIZE;
+      if (slotRight > forwardEdge) forwardEdge = slotRight;
     }
+
+    // The swept edge: where the caravan would be next frame if it moved
+    const sweptEdge = forwardEdge + moveAmount;
 
     let blocked = false;
 
-    // Check enemies: only block if enemy is in front of or at the right edge
-    // Enemy must be at or ahead of the right edge, vertically overlapping the caravan
+    // Check enemies: block only if enemy is strictly in front of the forward edge
+    // (enemy's left edge >= forwardEdge) and vertically aligned with caravan body
     for (const enemy of this.enemies) {
-      if (enemy.position.x - enemy.radius < right + moveAmount
-          && enemy.position.x + enemy.radius >= right
-          && enemy.position.y + enemy.radius > top
-          && enemy.position.y - enemy.radius < bottom) {
+      if (enemy.position.x - enemy.radius >= forwardEdge
+          && enemy.position.x - enemy.radius < sweptEdge
+          && enemy.position.y + enemy.radius > caravanTop
+          && enemy.position.y - enemy.radius < caravanBottom) {
         blocked = true;
         break;
       }
     }
 
-    // Check resource nodes: only block if node is in front of the right edge
+    // Check resource nodes: block only if node is in front of the forward edge
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
-        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
           blocked = true;
           break;
         }
@@ -2958,7 +2957,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
-        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
           blocked = true;
           break;
         }
@@ -2966,7 +2965,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
-        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, forwardEdge, sweptEdge, caravanTop, caravanBottom)) {
           blocked = true;
           break;
         }
@@ -3021,21 +3020,22 @@ export class GameScene extends Phaser.Scene {
     if (this.buildMode) this.updateBuildSlotHighlights();
   }
 
-  /** Check if a resource node is in front of the caravan's right edge (blocking forward movement) */
+  /** Check if a resource node is strictly in front of the caravan's forward edge */
   private isNodeInFrontPath(
     node: ResourceNode,
-    rightEdge: number,
-    top: number,
-    sweptRight: number,
-    bottom: number,
+    forwardEdge: number,
+    sweptEdge: number,
+    caravanTop: number,
+    caravanBottom: number,
   ): boolean {
     if (node.remaining <= 0) return false;
     const nLeft = node.position.x - node.radius;
     const nRight = node.position.x + node.radius;
-    // Node blocks if its left edge is in the forward sweep zone and vertically aligned
-    const nTop = node.position.y - node.radius;
-    const nBottom = node.position.y + node.radius;
-    return nLeft < sweptRight && nRight >= rightEdge && nBottom > top && nTop < bottom;
+    // Node blocks only if its left edge is at or past the forward edge (strictly in front)
+    return nLeft >= forwardEdge
+        && nLeft < sweptEdge
+        && node.position.y + node.radius > caravanTop
+        && node.position.y - node.radius < caravanBottom;
   }
 
   // ═══════════════════════════════════════════════════
