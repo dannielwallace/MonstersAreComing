@@ -2931,6 +2931,7 @@ export class GameScene extends Phaser.Scene {
     // Check resource nodes — only block when node's bounding box reaches caravan body
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
+        if (node.remaining <= 0) continue;
         if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
@@ -2939,6 +2940,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
+        if (node.remaining <= 0) continue;
         if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
@@ -2947,6 +2949,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
+        if (node.remaining <= 0) continue;
         if (this.isNodeBlockingCaravan(node, caravanFront, caravanCenterY, caravanHalf)) {
           blocked = true;
           break;
