@@ -293,10 +293,12 @@ export class GameScene extends Phaser.Scene {
 
   // HUD panels
   private healthPanel?: Phaser.GameObjects.Container;
+  private healthBgRect?: Phaser.GameObjects.Rectangle;
   private healthBar?: Phaser.GameObjects.Rectangle;
   private healthBarBg?: Phaser.GameObjects.Rectangle;
   private healthText?: Phaser.GameObjects.Text;
   private healthLabel?: Phaser.GameObjects.Text;
+  private divider1?: Phaser.GameObjects.Rectangle;
   private buildingLabel?: Phaser.GameObjects.Text;
   private heroLabel?: Phaser.GameObjects.Text;
   private weaponPrefix?: Phaser.GameObjects.Text;
@@ -2851,65 +2853,71 @@ export class GameScene extends Phaser.Scene {
     this.healthPanel = this.add.container(16, 16);
     this.healthPanel.setScrollFactor(0);
     this.healthPanel.setDepth(OVERLAY_DEPTH + 5);
-    this.healthPanel.add(this.add.rectangle(130, 80, 260, 160, 0x2a2018, 0.95).setStrokeStyle(2, 0x5a4a38, 0.6));
 
-    // ═══ 行城 ═══
-    this.healthLabel = this.add.text(16, 8, '行城', {
+    // ═══ 行城 (label left of bar, same vertical level) ═══
+    this.healthLabel = this.add.text(12, 16, '行城', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(140, 26, 180, 10, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(96, 16, 150, 8, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(40, 26, 176, 6, 0x4caf50);
+    this.healthBar = this.add.rectangle(21, 16, 146, 6, 0x4caf50);
     this.healthBar.setOrigin(0, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(140, 26, '', {
+    this.healthText = this.add.text(96, 16, '', {
       color: '#ffffff', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
 
     // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 38, 240, 1, 0x3a3020));
+    this.divider1 = this.add.rectangle(130, 34, 240, 1, 0x3a3020);
+    this.healthPanel.add(this.divider1);
 
     // ═══ 建筑 ═══
-    this.buildingLabel = this.add.text(16, 44, '建筑', {
-      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
+    this.buildingLabel = this.add.text(16, 42, '建筑', {
+      color: '#c8b898', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.buildingLabel);
-    this.towerCountText = this.add.text(68, 44, '', {
+    this.towerCountText = this.add.text(68, 42, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.towerCountText);
-    this.wallCountText = this.add.text(160, 44, '', {
+    this.wallCountText = this.add.text(160, 42, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.wallCountText);
 
     // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 62, 240, 1, 0x3a3020));
+    this.healthPanel.add(this.add.rectangle(130, 58, 240, 1, 0x3a3020));
 
     // ═══ 英雄 ═══
-    this.heroLabel = this.add.text(16, 68, '英雄', {
+    this.heroLabel = this.add.text(16, 64, '英雄', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.heroLabel);
-    this.weaponPrefix = this.add.text(16, 84, '武器：', {
+    this.weaponPrefix = this.add.text(16, 78, '武器：', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.weaponPrefix);
-    this.weaponLineText = this.add.text(62, 84, '', {
+    this.weaponLineText = this.add.text(62, 78, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.weaponLineText);
-    this.statsPrefix = this.add.text(16, 100, '属性：', {
+    this.statsPrefix = this.add.text(16, 92, '属性：', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.statsPrefix);
-    this.statsLineText = this.add.text(62, 100, '', {
+    this.statsLineText = this.add.text(62, 92, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.statsLineText);
+
+    // Dynamic background (sized to content, behind all text)
+    this.healthBgRect = this.add.rectangle(130, 58, 260, 116, 0x2a2018, 0.95);
+    this.healthBgRect.setStrokeStyle(2, 0x5a4a38, 0.6);
+    this.healthBgRect.setDepth(-1);
+    this.healthPanel.add(this.healthBgRect);
 
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
@@ -2975,7 +2983,7 @@ export class GameScene extends Phaser.Scene {
       const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
       const hpColor = hpRatio > 0.5 ? 0x4caf50 : hpRatio > 0.25 ? 0xfdd835 : 0xef4444;
       this.healthBar.setFillStyle(hpColor);
-      this.healthBar.setSize(Math.max(0, 176 * hpRatio), 6);
+      this.healthBar.setSize(Math.max(0, 146 * hpRatio), 6);
       this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
     }
 
