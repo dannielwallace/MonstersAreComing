@@ -2858,13 +2858,13 @@ export class GameScene extends Phaser.Scene {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.healthLabel);
-    this.healthBarBg = this.add.rectangle(140, 10, 180, 8, 0x1a1510);
+    this.healthBarBg = this.add.rectangle(140, 26, 180, 10, 0x1a1510);
     this.healthPanel.add(this.healthBarBg);
-    this.healthBar = this.add.rectangle(40, 10, 176, 4, 0x4caf50);
+    this.healthBar = this.add.rectangle(40, 26, 176, 6, 0x4caf50);
     this.healthBar.setOrigin(0, 0.5);
     this.healthPanel.add(this.healthBar);
-    this.healthText = this.add.text(130, 24, '', {
-      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
+    this.healthText = this.add.text(140, 26, '', {
+      color: '#ffffff', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthText.setOrigin(0.5);
     this.healthPanel.add(this.healthText);
@@ -2894,22 +2894,19 @@ export class GameScene extends Phaser.Scene {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.heroLabel);
-    this.weaponNameText = this.add.text(16, 82, '', {
+    this.weaponIcon = this.add.container(22, 84);
+    this.healthPanel.add(this.weaponIcon);
+    this.weaponNameText = this.add.text(38, 84, '', {
       color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.weaponNameText);
-    this.weaponIcon = this.add.container(18, 98);
-    this.healthPanel.add(this.weaponIcon);
-    this.weaponStatsText = this.add.text(34, 98, '', {
+    this.weaponStatsText = this.add.text(16, 100, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.weaponStatsText);
 
-    // Divider line
-    this.healthPanel.add(this.add.rectangle(130, 100, 240, 1, 0x3a3020));
-
-    // ═══ 属性加成 ═══
-    this.playerStatsText = this.add.text(16, 108, '', {
+    // Stats (no divider — flows under hero)
+    this.playerStatsText = this.add.text(16, 116, '', {
       color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
     this.healthPanel.add(this.playerStatsText);
@@ -2978,7 +2975,7 @@ export class GameScene extends Phaser.Scene {
       const hpRatio = this.stats.caravanHealth / this.stats.caravanMaxHealth;
       const hpColor = hpRatio > 0.5 ? 0x4caf50 : hpRatio > 0.25 ? 0xfdd835 : 0xef4444;
       this.healthBar.setFillStyle(hpColor);
-      this.healthBar.setSize(Math.max(0, 196 * hpRatio), 6);
+      this.healthBar.setSize(Math.max(0, 176 * hpRatio), 6);
       this.healthText.setText(`${Math.ceil(this.stats.caravanHealth)}/${this.stats.caravanMaxHealth}`);
     }
 
