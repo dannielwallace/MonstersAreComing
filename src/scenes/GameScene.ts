@@ -298,11 +298,11 @@ export class GameScene extends Phaser.Scene {
   private healthText?: Phaser.GameObjects.Text;
   private healthLabel?: Phaser.GameObjects.Text;
   private buildingLabel?: Phaser.GameObjects.Text;
-  private weaponIcon?: Phaser.GameObjects.Container;
   private heroLabel?: Phaser.GameObjects.Text;
-  private weaponNameText?: Phaser.GameObjects.Text;
-  private weaponStatsText?: Phaser.GameObjects.Text;
-  private playerStatsText?: Phaser.GameObjects.Text;
+  private weaponPrefix?: Phaser.GameObjects.Text;
+  private weaponLineText?: Phaser.GameObjects.Text;
+  private statsPrefix?: Phaser.GameObjects.Text;
+  private statsLineText?: Phaser.GameObjects.Text;
   private towerCountText?: Phaser.GameObjects.Text;
   private wallCountText?: Phaser.GameObjects.Text;
   private wavePanel?: Phaser.GameObjects.Container;
@@ -2894,22 +2894,22 @@ export class GameScene extends Phaser.Scene {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
     this.healthPanel.add(this.heroLabel);
-    this.weaponIcon = this.add.container(22, 84);
-    this.healthPanel.add(this.weaponIcon);
-    this.weaponNameText = this.add.text(38, 84, '', {
-      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px', fontStyle: 'bold',
+    this.weaponPrefix = this.add.text(16, 84, '武器：', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
     });
-    this.healthPanel.add(this.weaponNameText);
-    this.weaponStatsText = this.add.text(16, 100, '', {
+    this.healthPanel.add(this.weaponPrefix);
+    this.weaponLineText = this.add.text(62, 84, '', {
+      color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.healthPanel.add(this.weaponLineText);
+    this.statsPrefix = this.add.text(16, 100, '属性：', {
+      color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px', fontStyle: 'bold',
+    });
+    this.healthPanel.add(this.statsPrefix);
+    this.statsLineText = this.add.text(62, 100, '', {
       color: '#8a7a68', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
     });
-    this.healthPanel.add(this.weaponStatsText);
-
-    // Stats (no divider — flows under hero)
-    this.playerStatsText = this.add.text(16, 116, '', {
-      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
-    });
-    this.healthPanel.add(this.playerStatsText);
+    this.healthPanel.add(this.statsLineText);
 
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
@@ -3008,60 +3008,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateWeaponHud(): void {
-    if (!this.weaponNameText || !this.weaponStatsText || !this.weaponIcon || !this.heroLabel) return;
+    if (!this.weaponLineText) return;
     const owned = this.weapons.owned;
     if (owned.length === 0) {
-      this.weaponNameText.setText('无武器');
-      this.weaponStatsText.setText('');
-      this.weaponIcon.removeAll(true);
-      this.heroLabel.setColor('#d4a843');
+      this.weaponLineText.setText('无');
       return;
     }
-    // Show most recently acquired weapon (last in array)
     const active = owned[owned.length - 1];
     const def = WEAPON_DEFINITIONS[active.type];
     if (!def) return;
     const effectiveDmg = Math.round(def.damage * active.damageMultiplier * this.stats.weaponDamageMultiplier);
     const effectiveRange = Math.round(def.range + active.rangeBonus + this.stats.weaponRangeBonus);
-    this.weaponNameText.setText(def.name);
-    this.weaponStatsText.setText(`伤害 ${effectiveDmg}  射程 ${effectiveRange}`);
+    this.weaponLineText.setText(`${def.name}  伤害${effectiveDmg}  射程${effectiveRange}`);
 
-    // Color hero label to match weapon
-    const labelColors: Record<WeaponType, string> = {
+    // Color weapon prefix to match weapon type
+    const prefixColors: Record<WeaponType, string> = {
       'axe': '#ff8c42', 'saw': '#ffd700', 'drill': '#42a5f5', 'ritual-dagger': '#b388ff',
     };
-    this.heroLabel.setColor(labelColors[active.type] ?? '#d4a843');
-
-    // Icon: clear and rebuild
-    this.weaponIcon.removeAll(true);
-    const colors: Record<WeaponType, number> = {
-      'axe': 0xff8c42,
-      'saw': 0xffd700,
-      'drill': 0x42a5f5,
-      'ritual-dagger': 0xb388ff,
-    };
-    const color = colors[active.type] ?? 0xd4a843;
-    const icon = this.add.circle(0, 0, 10, color);
-    icon.setStrokeStyle(2, color, 0.8);
-    this.weaponIcon.add(icon);
-    // Inner symbol
-    const symbols: Record<WeaponType, string> = {
-      'axe': '⚔', 'saw': '⟳', 'drill': '▼', 'ritual-dagger': '†',
-    };
-    this.weaponIcon.add(
-      this.add.text(0, 0, symbols[active.type], {
-        color: '#1a1510', fontFamily: 'Arial', fontSize: '12px',
-      }).setOrigin(0.5),
-    );
+    if (this.weaponPrefix) this.weaponPrefix.setColor(prefixColors[active.type] ?? '#d4a843');
   }
 
   private updatePlayerStatsHud(): void {
-    if (!this.playerStatsText) return;
+    if (!this.statsLineText) return;
     const dmgBonus = ((this.stats.weaponDamageMultiplier - 1) * 100).toFixed(0);
     const speedBonus = ((1 - this.stats.weaponCooldownMultiplier) * 100).toFixed(0);
     const rangeBonus = this.stats.weaponRangeBonus.toFixed(0);
     const summonDmg = ((this.stats.summonDamageMultiplier - 1) * 100).toFixed(0);
-    this.playerStatsText.setText(`伤害+${dmgBonus}%  攻速+${speedBonus}%  射程+${rangeBonus}   召唤伤害+${summonDmg}%`);
+    this.statsLineText.setText(`伤害+${dmgBonus}%  攻速+${speedBonus}%  射程+${rangeBonus}   召唤+${summonDmg}%`);
   }
 
   private destroyHudPanels(): void {
