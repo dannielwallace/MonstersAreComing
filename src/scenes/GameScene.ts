@@ -347,7 +347,7 @@ export class GameScene extends Phaser.Scene {
   private bossStarted = false;
   private results: RunResults = createRunResults();
   private eventVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
-  private eventCountdownRings: Map<string, Phaser.GameObjects.Arc> = new Map();
+  private eventCountdownRings: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
   constructor() {
     super('GameScene');
@@ -2405,30 +2405,45 @@ export class GameScene extends Phaser.Scene {
 
   private updateEventVisuals(): void {
     for (const event of this.routeEvents.active) {
-      const ring = this.eventCountdownRings.get(event.id);
-      if (ring) {
-        const progress = 1 - event.remaining / 1.5;
-        const clamped = Math.max(0, Math.min(1, progress));
-        const endAngle = -90 + clamped * 360;
-        ring.setEndAngle(endAngle);
-        ring.setFillStyle(0xd4a843, clamped * 0.5);
+      const g = this.eventCountdownRings.get(event.id);
+      if (!g) continue;
+      g.clear();
+      const progress = 1 - event.remaining / 1.5;
+      const clamped = Math.max(0, Math.min(1, progress));
+      if (clamped <= 0) continue;
+
+      const startAngle = Phaser.Math.DegToRad(-90);
+      const endAngle = startAngle + clamped * Math.PI * 2;
+      const steps = Math.max(3, Math.round(clamped * 32));
+
+      g.fillStyle(0xd4a843, 0.7);
+      g.beginPath();
+      g.moveTo(0, 0);
+      for (let i = 0; i <= steps; i++) {
+        const angle = startAngle + (endAngle - startAngle) * (i / steps);
+        g.lineTo(Math.cos(angle) * 30, Math.sin(angle) * 30);
       }
+      g.closePath();
+      g.fillPath();
     }
   }
 
   private createEventVisual(event: RouteEvent): void {
     const visual = this.add.container(event.position.x, event.position.y);
     visual.setDepth(6);
-    const circle = this.add.circle(0, 0, 30, 0xd4a843, 0.15);
-    circle.setStrokeStyle(2, 0xd4a843, 0.5);
-    visual.add(circle);
-    const countdown = this.add.arc(0, 0, 30, -90, -90, false, 0xd4a843, 0);
-    countdown.setDepth(1);
-    visual.add(countdown);
-    this.eventCountdownRings.set(event.id, countdown);
+    // Base circle — low alpha background
+    visual.add(this.add.circle(0, 0, 30, 0xd4a843, 0.15).setStrokeStyle(2, 0xd4a843, 0.5).setDepth(1));
+
+    // Progress sector — Graphics object, redrawn each frame
+    const sector = this.add.graphics().setDepth(2);
+    visual.add(sector);
+    this.eventCountdownRings.set(event.id, sector);
+
+    // "?" label
     visual.add(this.add.text(0, 0, '?', {
       color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(2));
+    }).setOrigin(0.5).setDepth(3));
+
     this.eventVisuals.set(event.id, visual);
   }
 
