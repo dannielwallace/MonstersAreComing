@@ -2911,12 +2911,10 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    // ── Obstacle check: swept AABB against all obstacles ──
-    // Caravan moves right. Compute where it would be if it moved,
-    // and check if any obstacle overlaps with that position.
+    // ── Obstacle check: only check obstacles in the forward (right) direction ──
     const moveAmount = CARAVAN_SPEED * deltaSeconds;
 
-    // Current bounding box of caravan + all placed buildings
+    // Compute the caravan+buildings bounding box
     let left = this.caravanTopLeft.x;
     let top = this.caravanTopLeft.y;
     let right = left + CARAVAN_GRID_SIZE * CELL_SIZE;
@@ -2935,13 +2933,13 @@ export class GameScene extends Phaser.Scene {
       if (sBottom > bottom) bottom = sBottom;
     }
 
-    // Swept box: if we moved right, the right edge becomes right + moveAmount
     let blocked = false;
 
-    // Check enemies
+    // Check enemies: only block if enemy is in front of or at the right edge
+    // Enemy must be at or ahead of the right edge, vertically overlapping the caravan
     for (const enemy of this.enemies) {
-      if (enemy.position.x + enemy.radius > left
-          && enemy.position.x - enemy.radius < right + moveAmount
+      if (enemy.position.x - enemy.radius < right + moveAmount
+          && enemy.position.x + enemy.radius >= right
           && enemy.position.y + enemy.radius > top
           && enemy.position.y - enemy.radius < bottom) {
         blocked = true;
@@ -2949,10 +2947,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Check resource nodes
+    // Check resource nodes: only block if node is in front of the right edge
     if (!blocked) {
       for (const node of this.resourceSpawner.woodNodes) {
-        if (this.isNodeInSweptPath(node, left, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
           blocked = true;
           break;
         }
@@ -2960,7 +2958,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.stoneNodes) {
-        if (this.isNodeInSweptPath(node, left, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
           blocked = true;
           break;
         }
@@ -2968,7 +2966,7 @@ export class GameScene extends Phaser.Scene {
     }
     if (!blocked) {
       for (const node of this.resourceSpawner.goldNodes) {
-        if (this.isNodeInSweptPath(node, left, top, right + moveAmount, bottom)) {
+        if (this.isNodeInFrontPath(node, right, top, right + moveAmount, bottom)) {
           blocked = true;
           break;
         }
@@ -3023,20 +3021,21 @@ export class GameScene extends Phaser.Scene {
     if (this.buildMode) this.updateBuildSlotHighlights();
   }
 
-  /** Check if a resource node overlaps with the caravan's swept path this frame */
-  private isNodeInSweptPath(
+  /** Check if a resource node is in front of the caravan's right edge (blocking forward movement) */
+  private isNodeInFrontPath(
     node: ResourceNode,
-    boxLeft: number,
-    boxTop: number,
+    rightEdge: number,
+    top: number,
     sweptRight: number,
-    boxBottom: number,
+    bottom: number,
   ): boolean {
     if (node.remaining <= 0) return false;
     const nLeft = node.position.x - node.radius;
     const nRight = node.position.x + node.radius;
+    // Node blocks if its left edge is in the forward sweep zone and vertically aligned
     const nTop = node.position.y - node.radius;
     const nBottom = node.position.y + node.radius;
-    return nRight > boxLeft && nLeft < sweptRight && nBottom > boxTop && nTop < boxBottom;
+    return nLeft < sweptRight && nRight >= rightEdge && nBottom > top && nTop < bottom;
   }
 
   // ═══════════════════════════════════════════════════
