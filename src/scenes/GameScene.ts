@@ -2917,20 +2917,48 @@ export class GameScene extends Phaser.Scene {
     const caravanFront = this.caravanTopLeft.x + caravanHalf * 2; // right edge
     const caravanTop = this.caravanTopLeft.y;
     const caravanBottom = this.caravanTopLeft.y + caravanHalf * 2;
+    const caravanCenterY = caravanTop + caravanHalf;
 
-    let blockingEnemy: Enemy | undefined;
+    // Check enemies
+    let blocked = false;
     for (const enemy of this.enemies) {
       const dx = enemy.position.x - caravanFront;
-      const dy = Math.abs(enemy.position.y - (caravanTop + caravanHalf));
+      const dy = Math.abs(enemy.position.y - caravanCenterY);
       if (dx > -CARAVAN_OBSTACLE_THRESHOLD && dx < caravanHalf + CARAVAN_OBSTACLE_THRESHOLD
           && dy < caravanHalf + enemy.radius) {
-        blockingEnemy = enemy;
+        blocked = true;
         break;
       }
     }
 
-    if (blockingEnemy) {
-      // Caravan is blocked — stay stopped, enemy will attack caravan from range
+    // Check resource nodes (wood, stone, gold)
+    if (!blocked) {
+      for (const node of this.resourceSpawner.woodNodes) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+          blocked = true;
+          break;
+        }
+      }
+    }
+    if (!blocked) {
+      for (const node of this.resourceSpawner.stoneNodes) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+          blocked = true;
+          break;
+        }
+      }
+    }
+    if (!blocked) {
+      for (const node of this.resourceSpawner.goldNodes) {
+        if (this.isNodeBlockingCaravan(node, caravanFront, caravanTop, caravanBottom, caravanHalf)) {
+          blocked = true;
+          break;
+        }
+      }
+    }
+
+    if (blocked) {
+      // Caravan is blocked — stay stopped until obstacle clears
     } else {
       // Not blocked — move forward
       this.caravanTopLeft.x += CARAVAN_SPEED * deltaSeconds;
@@ -2975,6 +3003,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.buildMode) this.updateBuildSlotHighlights();
+  }
+
+  private isNodeBlockingCaravan(
+    node: ResourceNode,
+    caravanFront: number,
+    caravanTop: number,
+    caravanBottom: number,
+    caravanHalf: number,
+  ): boolean {
+    const dx = node.position.x - caravanFront;
+    const dy = Math.abs(node.position.y - (caravanTop + caravanHalf));
+    return dx > -CARAVAN_OBSTACLE_THRESHOLD && dx < caravanHalf + CARAVAN_OBSTACLE_THRESHOLD
+      && dy < caravanHalf + node.radius;
   }
 
   // ═══════════════════════════════════════════════════
