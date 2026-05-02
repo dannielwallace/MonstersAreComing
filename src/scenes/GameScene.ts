@@ -241,6 +241,8 @@ export class GameScene extends Phaser.Scene {
   private upgradeInputCooldown = 0;
   private upgradeChoices: UpgradeDefinition[] = [];
   private upgradeOverlay?: Phaser.GameObjects.Container;
+  private upgradeCards: Phaser.GameObjects.Rectangle[] = [];
+  private upgradeTexts: Phaser.GameObjects.Text[] = [];
   private wallet: ResourceWallet = createResourceWallet();
   private carried: CarriedResources = createCarriedResources();
   private elapsedSeconds = 0;
@@ -2335,6 +2337,7 @@ export class GameScene extends Phaser.Scene {
       card.on('pointerover', () => { card.setStrokeStyle(2, 0x8a7a58, 1); card.setFillStyle(0x4a4030, 1); });
       card.on('pointerout', () => { card.setStrokeStyle(1, 0x5a4a38, 0.6); card.setFillStyle(0x3a3020, 1); });
       card.on('pointerdown', () => { if (this.upgradeInputCooldown <= 0) this.selectUpgrade(index); });
+      this.upgradeCards.push(card);
 
       const icon = this.add.text(370, y, `${index + 1}`, {
         color: '#d4a843', fontFamily: 'Arial', fontSize: '20px', fontStyle: 'bold',
@@ -2348,6 +2351,8 @@ export class GameScene extends Phaser.Scene {
         color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px',
         wordWrap: { width: 520 },
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
+
+      this.upgradeTexts.push(icon, name, desc);
     });
 
     this.upgradeOverlay = overlay;
@@ -2355,6 +2360,10 @@ export class GameScene extends Phaser.Scene {
 
   private hideUpgradeOverlay(): void {
     if (this.upgradeOverlay) { this.upgradeOverlay.destroy(true); this.upgradeOverlay = undefined; }
+    for (const c of this.upgradeCards) c.destroy();
+    this.upgradeCards = [];
+    for (const t of this.upgradeTexts) t.destroy();
+    this.upgradeTexts = [];
   }
 
   private selectUpgrade(index: number): void {
