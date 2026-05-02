@@ -301,6 +301,8 @@ export class GameScene extends Phaser.Scene {
   private weaponIcon?: Phaser.GameObjects.Container;
   private weaponNameText?: Phaser.GameObjects.Text;
   private weaponStatsText?: Phaser.GameObjects.Text;
+  private playerStatsPanel?: Phaser.GameObjects.Container;
+  private playerStatsText?: Phaser.GameObjects.Text;
   private wavePanel?: Phaser.GameObjects.Container;
   private waveText?: Phaser.GameObjects.Text;
   private xpBarBg?: Phaser.GameObjects.Rectangle;
@@ -2879,6 +2881,16 @@ export class GameScene extends Phaser.Scene {
     this.weaponIcon = this.add.container(16, 16);
     this.weaponPanel.add(this.weaponIcon);
 
+    // Player stats panel (below weapon panel, left side)
+    this.playerStatsPanel = this.add.container(16, 148);
+    this.playerStatsPanel.setScrollFactor(0);
+    this.playerStatsPanel.setDepth(OVERLAY_DEPTH + 5);
+    this.playerStatsPanel.add(this.add.rectangle(100, 22, 200, 44, 0x2a2018, 0.95).setStrokeStyle(1, 0x5a4a38, 0.6));
+    this.playerStatsText = this.add.text(16, 6, '', {
+      color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '11px',
+    });
+    this.playerStatsPanel.add(this.playerStatsText);
+
     // Wave & Level panel (top-center)
     this.wavePanel = this.add.container(640, 16);
     this.wavePanel.setScrollFactor(0);
@@ -2950,6 +2962,9 @@ export class GameScene extends Phaser.Scene {
     // Weapon panel
     this.updateWeaponHud();
 
+    // Player stats panel
+    this.updatePlayerStatsHud();
+
     // Wave & Level panel
     if (this.waveText && this.xpBarFill && this.xpText) {
       const totalSlotCount = GRID_BUILD_SLOTS.length;
@@ -3011,9 +3026,23 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  private updatePlayerStatsHud(): void {
+    if (!this.playerStatsText) return;
+    const dmgBonus = ((this.stats.weaponDamageMultiplier - 1) * 100).toFixed(0);
+    const speedBonus = ((1 - this.stats.weaponCooldownMultiplier) * 100).toFixed(0);
+    const rangeBonus = this.stats.weaponRangeBonus.toFixed(0);
+    const summonDmg = ((this.stats.summonDamageMultiplier - 1) * 100).toFixed(0);
+    const lines = [
+      `武器伤害 +${dmgBonus}%  攻速 +${speedBonus}%  射程 +${rangeBonus}`,
+      `召唤伤害 +${summonDmg}%`,
+    ];
+    this.playerStatsText.setText(lines.join('\n'));
+  }
+
   private destroyHudPanels(): void {
     this.healthPanel?.destroy(true);
     this.weaponPanel?.destroy(true);
+    this.playerStatsPanel?.destroy(true);
     this.wavePanel?.destroy(true);
     this.resourcePanel?.destroy(true);
     this.shopButton?.destroy();
