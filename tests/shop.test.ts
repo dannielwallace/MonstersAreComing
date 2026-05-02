@@ -7,10 +7,10 @@ import {
 } from '../src/game/shop';
 
 const pool: ShopItem[] = [
-  { id: 'b-fire', kind: 'building', buildingType: 'fire', name: 'Fire Tower', cost: { gold: 8 } },
-  { id: 'w-saw', kind: 'weapon', weaponType: 'saw', name: 'Saw', cost: { gold: 10 } },
-  { id: 'heal', kind: 'repair', repairAmount: 25, name: 'Repair', cost: { stone: 5 } },
-  { id: 'gold', kind: 'resource', grant: { gold: 5 }, name: 'Gold Cache', cost: {} },
+  { id: 'b-fire', kind: 'building', buildingType: 'fire', name: 'Fire Tower', description: 'Fire tower test', cost: { gold: 8 } },
+  { id: 'w-saw', kind: 'weapon', weaponType: 'saw', name: 'Saw', description: 'Saw test', cost: { gold: 10 } },
+  { id: 'heal', kind: 'repair', repairAmount: 25, name: 'Repair', description: 'Repair test', cost: { stone: 5 } },
+  { id: 'gold', kind: 'resource', grant: { gold: 5 }, name: 'Gold Cache', description: 'Gold test', cost: {} },
 ];
 
 describe('shop', () => {

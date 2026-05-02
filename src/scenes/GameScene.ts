@@ -243,6 +243,7 @@ export class GameScene extends Phaser.Scene {
   private upgradeOverlay?: Phaser.GameObjects.Container;
   private upgradeCards: Phaser.GameObjects.Rectangle[] = [];
   private upgradeTexts: Phaser.GameObjects.Text[] = [];
+  private upgradeInfoBtns: Phaser.GameObjects.Text[] = [];
   private wallet: ResourceWallet = createResourceWallet();
   private carried: CarriedResources = createCarriedResources();
   private elapsedSeconds = 0;
@@ -1924,6 +1925,7 @@ export class GameScene extends Phaser.Scene {
     // Shop buttons placed directly in scene (Container children can't receive pointer events)
     const shopButtons: Phaser.GameObjects.Rectangle[] = [];
     const shopTexts: Phaser.GameObjects.Text[] = [];
+    const shopDescTexts: Phaser.GameObjects.Text[] = [];
     this.shop.stock.forEach((item, index) => {
       const y = 270 + index * 58;
       const button = this.add.rectangle(640, y, 560, 44, 0x3a3020, 1)
@@ -1934,6 +1936,29 @@ export class GameScene extends Phaser.Scene {
       shopButtons.push(button);
       shopTexts.push(this.add.text(390, y, item.name, { color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px' }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
       shopTexts.push(this.add.text(890, y, this.formatCost(item.cost), { color: '#c8a860', fontFamily: 'monospace', fontSize: '13px' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 23));
+
+      // Description shown on hover
+      const descY = y + 22;
+      const desc = this.add.text(390, descY, item.description, {
+        color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '12px',
+        wordWrap: { width: 500 },
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 22).setAlpha(0);
+      shopDescTexts.push(desc);
+
+      // "?" info button
+      const infoX = 945;
+      const infoBtn = this.add.text(infoX, y, '?', {
+        color: '#8a7a58', fontFamily: 'Arial', fontSize: '16px', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 24).setInteractive({ useHandCursor: true });
+      infoBtn.on('pointerover', () => {
+        infoBtn.setColor('#d4a843');
+        desc.setAlpha(1);
+      });
+      infoBtn.on('pointerout', () => {
+        infoBtn.setColor('#8a7a58');
+        desc.setAlpha(0);
+      });
+      shopTexts.push(infoBtn, desc);
     });
 
     const rerollBtn = this.add.rectangle(520, 525, 160, 38, 0x3a3020, 1)
@@ -1951,7 +1976,7 @@ export class GameScene extends Phaser.Scene {
 
     this.shopOverlay = overlay;
     this.shopOverlayButtons = shopButtons;
-    this.shopOverlayTexts = shopTexts;
+    this.shopOverlayTexts = [...shopTexts, ...shopDescTexts];
   }
 
   private hideShopOverlay(): void {
@@ -2347,10 +2372,27 @@ export class GameScene extends Phaser.Scene {
         color: '#e0d8c8', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '20px',
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
 
+      // Description shown inline (hidden until hover on ?)
       const desc = this.add.text(400, y + 14, choice.description, {
         color: '#a09880', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '15px',
         wordWrap: { width: 520 },
       }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 21);
+      desc.setAlpha(0.5);
+
+      // "?" info button
+      const infoX = 920;
+      const infoBtn = this.add.text(infoX, y, '?', {
+        color: '#8a7a58', fontFamily: 'Arial', fontSize: '18px', fontStyle: 'bold',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 22).setInteractive({ useHandCursor: true });
+      infoBtn.on('pointerover', () => {
+        infoBtn.setColor('#d4a843');
+        desc.setAlpha(1);
+      });
+      infoBtn.on('pointerout', () => {
+        infoBtn.setColor('#8a7a58');
+        desc.setAlpha(0.5);
+      });
+      this.upgradeInfoBtns.push(infoBtn);
 
       this.upgradeTexts.push(icon, name, desc);
     });
@@ -2364,6 +2406,8 @@ export class GameScene extends Phaser.Scene {
     this.upgradeCards = [];
     for (const t of this.upgradeTexts) t.destroy();
     this.upgradeTexts = [];
+    for (const b of this.upgradeInfoBtns) b.destroy();
+    this.upgradeInfoBtns = [];
   }
 
   private selectUpgrade(index: number): void {

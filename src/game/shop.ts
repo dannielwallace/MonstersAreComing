@@ -7,6 +7,7 @@ export interface ShopItem {
   id: string;
   kind: ShopItemKind;
   name: string;
+  description: string;
   cost: ResourceAmounts;
   buildingType?: BuildingType;
   weaponType?: 'axe' | 'saw' | 'ritual-dagger' | 'drill';
@@ -22,14 +23,14 @@ export interface ShopState {
 }
 
 export const DEFAULT_SHOP_POOL: ShopItem[] = [
-  { id: 'shop-arrow', kind: 'building', buildingType: 'arrow', name: '箭塔', cost: { gold: 6 } },
-  { id: 'shop-fire', kind: 'building', buildingType: 'fire', name: '火塔', cost: { gold: 8 } },
-  { id: 'shop-ice', kind: 'building', buildingType: 'ice', name: '冰塔', cost: { gold: 8 } },
-  { id: 'shop-minion', kind: 'building', buildingType: 'minion', name: '召唤塔', cost: { gold: 10 } },
-  { id: 'shop-saw', kind: 'weapon', weaponType: 'saw', name: '旋锯', cost: { gold: 10 } },
-  { id: 'shop-dagger', kind: 'weapon', weaponType: 'ritual-dagger', name: '仪式弹', cost: { gold: 12 } },
-  { id: 'shop-repair', kind: 'repair', repairAmount: 25, name: '修理行城', cost: { stone: 5 } },
-  { id: 'shop-gold-cache', kind: 'resource', grant: { gold: 6 }, name: '金币箱', cost: {} },
+  { id: 'shop-arrow', kind: 'building', buildingType: 'arrow', name: '箭塔', description: '自动攻击范围内最近敌人，伤害 +5/次', cost: { gold: 6 } },
+  { id: 'shop-fire', kind: 'building', buildingType: 'fire', name: '火塔', description: '攻击造成范围燃烧伤害，附带持续灼烧效果', cost: { gold: 8 } },
+  { id: 'shop-ice', kind: 'building', buildingType: 'ice', name: '冰塔', description: '攻击减速敌人，降低移动和攻击速度', cost: { gold: 8 } },
+  { id: 'shop-minion', kind: 'building', buildingType: 'minion', name: '召唤塔', description: '定期召唤亡灵仆从，仆从自动迎敌作战', cost: { gold: 10 } },
+  { id: 'shop-saw', kind: 'weapon', weaponType: 'saw', name: '旋锯', description: '英雄远程武器，范围AOE伤害，可同时命中多个敌人', cost: { gold: 10 } },
+  { id: 'shop-dagger', kind: 'weapon', weaponType: 'ritual-dagger', name: '仪式弹', description: '英雄远程武器，击杀敌人后召唤残影（7秒寿命）', cost: { gold: 12 } },
+  { id: 'shop-repair', kind: 'repair', repairAmount: 25, name: '修理行城', description: '立即回复行城 25 点生命值', cost: { stone: 5 } },
+  { id: 'shop-gold-cache', kind: 'resource', grant: { gold: 6 }, name: '金币箱', description: '获得 6 金币', cost: {} },
 ];
 
 function pickStock(pool: ShopItem[], stockSize: number, random: () => number): ShopItem[] {
