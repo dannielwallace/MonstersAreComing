@@ -331,6 +331,7 @@ export class GameScene extends Phaser.Scene {
   private currentFps = 0;
   private _lastBlockerInfo = '无障碍';
   private _lastForwardEdge = 0;
+  private hudThrottle = 0;
   private wavePanel?: Phaser.GameObjects.Container;
   private waveText?: Phaser.GameObjects.Text;
   private xpBarBg?: Phaser.GameObjects.Rectangle;
@@ -490,7 +491,11 @@ export class GameScene extends Phaser.Scene {
     this.updateFeedback(deltaSeconds);
     this.updateWaveBanner(deltaSeconds);
     this.applyPendingWallRepair();
-    this.updateHudPanels();
+    this.hudThrottle += deltaSeconds;
+    if (this.hudThrottle >= 0.25) {
+      this.updateHudPanels();
+      this.hudThrottle = 0;
+    }
 
     if (this.victoryAchieved) return;
 
@@ -1225,7 +1230,7 @@ export class GameScene extends Phaser.Scene {
   private updateGathering(deltaSeconds: number): void {
     let gatheredThisFrame = false;
 
-    for (const rendered of [...this.woodRenderedNodes]) {
+    for (const rendered of this.woodRenderedNodes) {
       const { node } = rendered;
       if (node.remaining <= 0) continue;
       if (distanceSquared(this.playerPosition, node.position) > GATHER_RANGE * GATHER_RANGE) {
@@ -1257,7 +1262,7 @@ export class GameScene extends Phaser.Scene {
       rendered.container.setAlpha(0.85 + Math.sin(rendered.gatherTimer * 10) * 0.15);
     }
 
-    for (const rendered of [...this.stoneRenderedNodes]) {
+    for (const rendered of this.stoneRenderedNodes) {
       const { node } = rendered;
       if (node.remaining <= 0) continue;
       if (distanceSquared(this.playerPosition, node.position) > GATHER_RANGE * GATHER_RANGE) {
@@ -1284,7 +1289,7 @@ export class GameScene extends Phaser.Scene {
       rendered.shape.setAlpha(0.8 + Math.sin(rendered.gatherTimer * 10) * 0.2);
     }
 
-    for (const rendered of [...this.goldRenderedNodes]) {
+    for (const rendered of this.goldRenderedNodes) {
       const { node } = rendered;
       if (node.remaining <= 0) continue;
       if (distanceSquared(this.playerPosition, node.position) > GATHER_RANGE * GATHER_RANGE) {
@@ -1862,6 +1867,7 @@ export class GameScene extends Phaser.Scene {
       tower.fireTimer = Math.max(0, tower.fireTimer - deltaSeconds);
       if (tower.fireTimer > 0) continue;
 
+      // Compute adjacency bonus only when tower is about to fire
       const adjacency = computeAdjacencyBonus(tower.slotId, GRID_BUILD_SLOTS, placed);
       const isArrowType = tower.type === 'arrow';
       const baseDamage = definition.damage;
@@ -2949,7 +2955,7 @@ export class GameScene extends Phaser.Scene {
     let blocked = false;
     let blockerInfo = '无障碍';
 
-    // Check enemies
+    // Check enemies (only nearby enemies can block)
     for (const enemy of this.enemies) {
       if (isObstacleBlocking(
         { position: enemy.position, radius: enemy.radius, active: true },
@@ -2961,7 +2967,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Check resource nodes
+    // Check resource nodes (only nodes ahead of forward edge, skip far-behind nodes)
     if (!blocked) {
       const allNodes = [
         ...this.resourceSpawner.woodNodes,
@@ -2969,6 +2975,9 @@ export class GameScene extends Phaser.Scene {
         ...this.resourceSpawner.goldNodes,
       ];
       for (const node of allNodes) {
+        if (node.remaining <= 0) continue;
+        // Only check nodes in front of forward edge (skip nodes far behind)
+        if (node.position.x + node.radius < forwardEdge) continue;
         if (isObstacleBlocking(
           { position: node.position, radius: node.radius, active: node.remaining > 0 },
           forwardEdge, sweptEdge, forwardCells,
