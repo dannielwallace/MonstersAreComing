@@ -415,8 +415,6 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, 720);
 
     this.createTerrain();
-    this.createRoad();
-    this.createRoadsideScenery();
     this.createVignette();
     this.player = this.createPlayerContainer(this.playerPosition.x, this.playerPosition.y);
     this.caravanBody = this.createCaravan(getCaravanCenter(this.caravanTopLeft));
@@ -664,186 +662,177 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private createTerrain(): void {
-    // 暗色森林地面
-    this.add.rectangle(WORLD_WIDTH / 2, 360, WORLD_WIDTH, 720, 0x2a3a28, 0.95).setDepth(0);
-    // 地面纹理变化
-    for (let x = 0; x < WORLD_WIDTH; x += 60) {
-      for (let i = 0; i < 4; i++) {
-        const gx = x + Math.random() * 60;
-        const gy = 30 + Math.random() * 660;
-        const patch = this.add.circle(gx, gy, 15 + Math.random() * 25, 0x2a3a28, 0.3 + Math.random() * 0.2);
-        patch.setDepth(0);
+    // Bake static scenery into tiled canvas textures to stay within WebGL
+    // max texture size (~4096px). Each tile covers a strip of the world.
+    const TILE_W = 4096;
+    const numTiles = Math.ceil(WORLD_WIDTH / TILE_W);
+
+    // Seed RNG deterministically so each tile matches across calls
+    // (We just need a consistent random source per-tile, so we create
+    // one RNG per tile using a simple linear congruential generator)
+    function seededRandom(seed: number) {
+      let s = seed;
+      return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+    }
+
+    for (let t = 0; t < numTiles; t++) {
+      const offsetX = t * TILE_W;
+      const g = this.make.graphics();
+      const rng = seededRandom(t * 7919 + 1);
+
+      // 暗色森林地面
+      g.fillStyle(0x2a3a28, 0.95);
+      g.fillRect(0, 0, TILE_W, 720);
+
+      // 地面纹理变化
+      for (let x = 0; x < TILE_W; x += 60) {
+        for (let i = 0; i < 4; i++) {
+          const gx = x + rng() * 60;
+          const gy = 30 + rng() * 660;
+          g.fillStyle(0x2a3a28, 0.3 + rng() * 0.2);
+          g.fillCircle(gx, gy, 15 + rng() * 25);
+        }
       }
-    }
-    // 远处枯树（背景层）
-    for (let x = 0; x < WORLD_WIDTH; x += 200) {
-      const treeSide = Math.random() > 0.5 ? 1 : -1;
-      const treeY = treeSide > 0 ? 80 + Math.random() * 200 : 480 + Math.random() * 160;
-      this.createDeadTree(x + Math.random() * 100, treeY, 0.6 + Math.random() * 0.4);
-    }
-  }
 
-  private createDeadTree(x: number, y: number, scale = 1): void {
-    const g = this.add.graphics();
-    g.setDepth(0);
-    g.fillStyle(0x1a2a18, 0.6);
-    // 树干
-    g.fillRect(x - 2 * scale, y - 30 * scale, 4 * scale, 30 * scale);
-    // 树枝（枯枝剪影）
-    g.fillRect(x - 16 * scale, y - 28 * scale, 16 * scale, 2 * scale);
-    g.fillRect(x, y - 20 * scale, 14 * scale, 2 * scale);
-    g.fillRect(x - 10 * scale, y - 36 * scale, 2 * scale, 12 * scale);
-    // 稀疏枯叶
-    g.fillStyle(0x2a3a28, 0.3);
-    g.fillCircle(x - 14 * scale, y - 30 * scale, 6 * scale);
-    g.fillCircle(x + 8 * scale, y - 22 * scale, 5 * scale);
-    g.destroy();
-  }
-
-  private createRoad(): void {
-    // 土路
-    this.add.rectangle(WORLD_WIDTH / 2, 360, WORLD_WIDTH, 100, 0x3a3020, 0.9).setDepth(1);
-    // 路边石子
-    this.add.rectangle(WORLD_WIDTH / 2, 308, WORLD_WIDTH, 4, 0x4a4030, 0.5).setDepth(1);
-    this.add.rectangle(WORLD_WIDTH / 2, 412, WORLD_WIDTH, 4, 0x4a4030, 0.5).setDepth(1);
-    // 路面纹理（车辙、坑洼）
-    for (let x = 0; x < WORLD_WIDTH; x += 80) {
-      const spot = this.add.circle(x + Math.random() * 40, 340 + Math.random() * 40, 3 + Math.random() * 5, 0x2a2018, 0.4);
-      spot.setDepth(1);
-    }
-    // 车辙痕迹
-    for (let x = 0; x < WORLD_WIDTH; x += 40) {
-      if (Math.random() > 0.4) {
-        const rut = this.add.rectangle(x + Math.random() * 20, 350 + Math.random() * 20, 12 + Math.random() * 8, 1.5, 0x2a1a10, 0.3);
-        rut.setDepth(1);
+      // 远处枯树
+      for (let x = 0; x < TILE_W; x += 200) {
+        const treeSide = rng() > 0.5 ? 1 : -1;
+        const treeY = treeSide > 0 ? 80 + rng() * 200 : 480 + rng() * 160;
+        const treeX = offsetX + x + rng() * 100;
+        // Draw relative to tile origin
+        const rx = treeX - offsetX;
+        const s = 0.6 + rng() * 0.4;
+        g.fillStyle(0x1a2a18, 0.6);
+        g.fillRect(rx - 2 * s, treeY - 30 * s, 4 * s, 30 * s);
+        g.fillRect(rx - 16 * s, treeY - 28 * s, 16 * s, 2 * s);
+        g.fillRect(rx, treeY - 20 * s, 14 * s, 2 * s);
+        g.fillRect(rx - 10 * s, treeY - 36 * s, 2 * s, 12 * s);
+        g.fillStyle(0x2a3a28, 0.3);
+        g.fillCircle(rx - 14 * s, treeY - 30 * s, 6 * s);
+        g.fillCircle(rx + 8 * s, treeY - 22 * s, 5 * s);
       }
-    }
-    // 路边枯草
-    for (let x = 0; x < WORLD_WIDTH; x += 40) {
-      for (let side = -1; side <= 1; side += 2) {
-        if (Math.random() > 0.5) continue;
-        const gx = x + Math.random() * 30;
-        const gy = side > 0 ? 295 + Math.random() * 10 : 415 + Math.random() * 10;
-        const blade = this.add.line(0, 0, gx, gy, gx + (Math.random() - 0.5) * 6, gy - 8 - Math.random() * 6, 0x3a4a2a, 0.4).setOrigin(0, 0);
-        blade.setDepth(1);
+
+      // 土路
+      g.fillStyle(0x3a3020, 0.9);
+      g.fillRect(0, 310, TILE_W, 100);
+      g.fillStyle(0x4a4030, 0.5);
+      g.fillRect(0, 306, TILE_W, 4);
+      g.fillRect(0, 410, TILE_W, 4);
+      for (let x = 0; x < TILE_W; x += 80) {
+        g.fillStyle(0x2a2018, 0.4);
+        g.fillCircle(x + rng() * 40, 340 + rng() * 40, 3 + rng() * 5);
       }
-    }
-  }
+      for (let x = 0; x < TILE_W; x += 40) {
+        if (rng() > 0.4) {
+          g.fillStyle(0x2a1a10, 0.3);
+          g.fillRect(x + rng() * 20, 350 + rng() * 20, 12 + rng() * 8, 1.5);
+        }
+      }
+      for (let x = 0; x < TILE_W; x += 40) {
+        for (let side = -1; side <= 1; side += 2) {
+          if (rng() > 0.5) continue;
+          const gx = x + rng() * 30;
+          const gy = side > 0 ? 295 + rng() * 10 : 415 + rng() * 10;
+          g.lineStyle(1, 0x3a4a2a, 0.4);
+          g.lineBetween(gx, gy, gx + (rng() - 0.5) * 6, gy - 8 - rng() * 6);
+        }
+      }
 
-  private createRoadsideScenery(): void {
-    // Medieval ruins along the road (broken walls, arches, collapsed towers)
-    for (let x = 300; x < WORLD_WIDTH; x += 600 + Math.random() * 400) {
-      const side = Math.random() > 0.5 ? 1 : -1;
-      const ruinY = side > 0 ? 260 + Math.random() * 30 : 440 + Math.random() * 30;
-      this.createRoadsideRuin(x + Math.random() * 100, ruinY);
-    }
-
-    // Resource clusters: groups of 2-3 wood/stone nodes placed together
-    for (let x = 500; x < WORLD_WIDTH; x += 800 + Math.random() * 600) {
-      const clusterX = x + Math.random() * 200;
-      const count = 2 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < count; i++) {
-        const cx = clusterX + i * 50 + Math.random() * 30;
-        const cy = 180 + Math.random() * 60 + (Math.random() > 0.5 ? 300 : 0);
-        // Small tree stump or rock as cluster marker
-        if (Math.random() > 0.5) {
-          const stump = this.add.circle(cx, cy, 6 + Math.random() * 4, 0x3a2a18, 0.35);
-          stump.setDepth(1);
+      // Medieval ruins
+      for (let x = 300; x < TILE_W; x += 600 + rng() * 400) {
+        const side = rng() > 0.5 ? 1 : -1;
+        const ruinY = side > 0 ? 260 + rng() * 30 : 440 + rng() * 30;
+        const rx = x + rng() * 100;
+        const ruinType = Math.floor(rng() * 3);
+        const s = 0.8 + rng() * 0.4;
+        g.fillStyle(0x5a5048, 0.4);
+        if (ruinType === 0) {
+          const w = 20 + rng() * 30;
+          const h = 30 + rng() * 40;
+          g.fillRect(rx, ruinY - h * s, w * s, h * s);
+        } else if (ruinType === 1) {
+          const archW = 30 + rng() * 20;
+          const archH = 40 + rng() * 15;
+          g.fillRect(rx, ruinY - archH * s, 6 * s, archH * s);
+          g.fillRect(rx + archW * s, ruinY - archH * s, 6 * s, archH * s);
+          g.fillRect(rx, ruinY - archH * s, archW * s + 6 * s, 6 * s);
         } else {
-          const rock = this.add.circle(cx, cy, 4 + Math.random() * 5, 0x5a5a5a, 0.25);
-          rock.setDepth(1);
+          const tw = 15 + rng() * 10;
+          const th = 40 + rng() * 25;
+          g.fillRect(rx, ruinY - th * s, tw * s, th * s);
+          g.fillRect(rx - 8 * s, ruinY - th * s - 4 * s, tw * s + 16 * s, 6 * s);
+          g.fillStyle(0x2a1a18, 0.5);
+          g.fillRect(rx + 4 * s, ruinY - th * s + 10 * s, 5 * s, 6 * s);
         }
       }
-    }
 
-    // Terrain variety: darker patches, rocky areas, grassy clearings
-    for (let x = 0; x < WORLD_WIDTH; x += 300) {
-      const variant = Math.random();
-      if (variant < 0.3) {
-        // Darker mossy patch
-        const px = x + Math.random() * 150;
-        const py = 100 + Math.random() * 520;
-        const moss = this.add.circle(px, py, 40 + Math.random() * 30, 0x1a2a18, 0.2);
-        moss.setDepth(0);
-      } else if (variant < 0.5) {
-        // Rocky area
-        const px = x + Math.random() * 150;
-        const py = 100 + Math.random() * 520;
-        for (let r = 0; r < 3; r++) {
-          const rock = this.add.circle(px + Math.random() * 40 - 20, py + Math.random() * 20 - 10, 3 + Math.random() * 6, 0x5a5a5a, 0.3);
-          rock.setDepth(0);
+      // Resource clusters
+      for (let x = 500; x < TILE_W; x += 800 + rng() * 600) {
+        const clusterX = x + rng() * 200;
+        const count = 2 + Math.floor(rng() * 2);
+        for (let i = 0; i < count; i++) {
+          const cx = clusterX + i * 50 + rng() * 30;
+          const cy = 180 + rng() * 60 + (rng() > 0.5 ? 300 : 0);
+          if (rng() > 0.5) {
+            g.fillStyle(0x3a2a18, 0.35);
+            g.fillCircle(cx, cy, 6 + rng() * 4);
+          } else {
+            g.fillStyle(0x5a5a5a, 0.25);
+            g.fillCircle(cx, cy, 4 + rng() * 5);
+          }
         }
-      } else if (variant < 0.6) {
-        // Grassy clearing (slightly brighter)
-        const px = x + Math.random() * 150;
-        const patch = this.add.circle(px, 360 + (Math.random() - 0.5) * 300, 80 + Math.random() * 40, 0x3a4a30, 0.15);
-        patch.setDepth(0);
       }
-    }
 
-    // Roadside debris: broken shields, bones, cart wheels
-    for (let x = 0; x < WORLD_WIDTH; x += 150) {
-      if (Math.random() > 0.6) continue;
-      const dx = x + Math.random() * 80;
-      const side = Math.random() > 0.5 ? 1 : -1;
-      const dy = side > 0 ? 300 + Math.random() * 8 : 420 + Math.random() * 8;
-      const debrisType = Math.random();
-      if (debrisType < 0.3) {
-        // Small bone fragment
-        const bone = this.add.rectangle(dx, dy, 8 + Math.random() * 6, 2, 0xc8c0b0, 0.25);
-        bone.setDepth(1);
-      } else if (debrisType < 0.6) {
-        // Shield fragment (triangle)
-        const shield = this.add.triangle(dx, dy, -5, 5, 5, 5, 0, -7, 0x6a4a3a, 0.2);
-        shield.setDepth(1);
-      } else {
-        // Stone rubble
-        const rubble = this.add.circle(dx, dy, 4 + Math.random() * 4, 0x7a7568, 0.2);
-        rubble.setDepth(1);
+      // Terrain variety
+      for (let x = 0; x < TILE_W; x += 300) {
+        const variant = rng();
+        if (variant < 0.3) {
+          const px = x + rng() * 150;
+          const py = 100 + rng() * 520;
+          g.fillStyle(0x1a2a18, 0.2);
+          g.fillCircle(px, py, 40 + rng() * 30);
+        } else if (variant < 0.5) {
+          const px = x + rng() * 150;
+          const py = 100 + rng() * 520;
+          for (let r = 0; r < 3; r++) {
+            g.fillStyle(0x5a5a5a, 0.3);
+            g.fillCircle(px + rng() * 40 - 20, py + rng() * 20 - 10, 3 + rng() * 6);
+          }
+        } else if (variant < 0.6) {
+          const px = x + rng() * 150;
+          g.fillStyle(0x3a4a30, 0.15);
+          g.fillCircle(px, 360 + (rng() - 0.5) * 300, 80 + rng() * 40);
+        }
       }
-    }
-  }
 
-  private createRoadsideRuin(x: number, y: number): void {
-    const ruinType = Math.floor(Math.random() * 3);
-    const g = this.add.graphics();
-    g.setDepth(1);
-
-    if (ruinType === 0) {
-      // Broken wall section
-      const w = 20 + Math.random() * 30;
-      const h = 30 + Math.random() * 40;
-      g.fillStyle(0x9a9588, 0.35);
-      g.fillRect(x - w / 2, y - h, w, h);
-      g.fillStyle(0x7a7568, 0.2);
-      // Cracks
-      g.fillRect(x - w / 4, y - h * 0.6, 2, h * 0.4);
-      // Top jagged edge
-      for (let cx = x - w / 2; cx < x + w / 2; cx += 8) {
-        const ch = Math.random() * 8;
-        g.fillStyle(0x9a9588, 0.3);
-        g.fillRect(cx, y - h - ch, 6, ch);
+      // Roadside debris
+      for (let x = 0; x < TILE_W; x += 150) {
+        if (rng() > 0.6) continue;
+        const dx = x + rng() * 80;
+        const side = rng() > 0.5 ? 1 : -1;
+        const dy = side > 0 ? 300 + rng() * 8 : 420 + rng() * 8;
+        const debrisType = rng();
+        if (debrisType < 0.3) {
+          g.fillStyle(0xc8c0b0, 0.25);
+          g.fillRect(dx, dy, 8 + rng() * 6, 2);
+        } else if (debrisType < 0.6) {
+          g.fillStyle(0x6a4a3a, 0.2);
+          g.fillTriangle(dx - 5, dy + 5, dx + 5, dy + 5, dx, dy - 7);
+        } else {
+          g.fillStyle(0x7a7568, 0.2);
+          g.fillCircle(dx, dy, 4 + rng() * 4);
+        }
       }
-    } else if (ruinType === 1) {
-      // Collapsed pillar
-      g.fillStyle(0x8a8578, 0.3);
-      g.fillRect(x - 4, y - 50, 8, 50);
-      g.fillRect(x - 12, y - 52, 24, 6);
-      // Fallen top piece
-      g.fillStyle(0x8a8578, 0.2);
-      g.fillRect(x + 6, y - 2, 20, 4);
-    } else {
-      // Abandoned camp (fire pit)
-      g.fillStyle(0x3a3020, 0.5);
-      g.fillCircle(x, y, 8);
-      // Ash ring
-      g.lineStyle(1, 0x6a6058, 0.25);
-      g.strokeCircle(x, y, 10);
-      // Charred log
-      g.fillStyle(0x1a1510, 0.4);
-      g.fillRect(x - 12, y - 2, 24, 4);
+
+      g.generateTexture(`terrain-${t}`, TILE_W, 720);
+      g.destroy();
+
+      const actualTileW = Math.min(TILE_W, WORLD_WIDTH - offsetX);
+      const img = this.add.image(offsetX + actualTileW / 2, 360, `terrain-${t}`).setDepth(0);
+      img.setScrollFactor(0);
+      img.setDisplaySize(actualTileW, 720);
+      img.setOrigin(0.5, 0.5);
     }
-    g.destroy();
   }
 
   private createVignette(): void {
@@ -1733,10 +1722,12 @@ export class GameScene extends Phaser.Scene {
       // 1) Wall block
       let blockedByWall: Wall | undefined;
       let minWallDist = Number.POSITIVE_INFINITY;
+      const wallBlockThreshold = (enemy.radius + WALL_BLOCK_RANGE) * (enemy.radius + WALL_BLOCK_RANGE);
       for (const wall of this.walls) {
-        const wallDist = distanceSquared(enemy.position, wall.position);
-        const blockThreshold = (enemy.radius + WALL_BLOCK_RANGE) * (enemy.radius + WALL_BLOCK_RANGE);
-        if (wallDist <= blockThreshold && wallDist < minWallDist) {
+        const dx = enemy.position.x - wall.position.x;
+        const dy = enemy.position.y - wall.position.y;
+        const wallDist = dx * dx + dy * dy;
+        if (wallDist <= wallBlockThreshold && wallDist < minWallDist) {
           blockedByWall = wall; minWallDist = wallDist;
         }
       }
@@ -1766,11 +1757,13 @@ export class GameScene extends Phaser.Scene {
       // 2) Tower / building block — enemies attack buildings in their path
       let blockedByTower: Tower | undefined;
       let minTowerDist = Number.POSITIVE_INFINITY;
+      const towerBlockThreshold = (enemy.radius + TOWER_BLOCK_RANGE) * (enemy.radius + TOWER_BLOCK_RANGE);
       for (const tower of this.towers) {
         if (tower.type === 'attack-banner' || tower.type === 'speed-banner') continue;
-        const towerDist = distanceSquared(enemy.position, tower.position);
-        const blockThreshold = (enemy.radius + TOWER_BLOCK_RANGE) * (enemy.radius + TOWER_BLOCK_RANGE);
-        if (towerDist <= blockThreshold && towerDist < minTowerDist) {
+        const dx = enemy.position.x - tower.position.x;
+        const dy = enemy.position.y - tower.position.y;
+        const towerDist = dx * dx + dy * dy;
+        if (towerDist <= towerBlockThreshold && towerDist < minTowerDist) {
           blockedByTower = tower; minTowerDist = towerDist;
         }
       }
@@ -1810,18 +1803,20 @@ export class GameScene extends Phaser.Scene {
       }
 
       // 4) Enemy separation — push apart when too close
+      // Use squared distance early-exit to skip Math.hypot for far-away pairs
+      const sepDistSq = ENEMY_SEPARATION_DIST * ENEMY_SEPARATION_DIST;
       let sepX = 0;
       let sepY = 0;
       for (const other of this.enemies) {
         if (other.id === enemy.id) continue;
         const dx = enemy.position.x - other.position.x;
         const dy = enemy.position.y - other.position.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 0 && dist < ENEMY_SEPARATION_DIST) {
-          const push = (ENEMY_SEPARATION_DIST - dist) / ENEMY_SEPARATION_DIST * 1.5;
-          sepX += (dx / dist) * push;
-          sepY += (dy / dist) * push;
-        }
+        const distSq = dx * dx + dy * dy;
+        if (distSq >= sepDistSq || distSq === 0) continue;
+        const dist = Math.sqrt(distSq);
+        const push = (ENEMY_SEPARATION_DIST - dist) / ENEMY_SEPARATION_DIST * 1.5;
+        sepX += (dx / dist) * push;
+        sepY += (dy / dist) * push;
       }
 
       // Move toward caravan, with separation
@@ -1928,7 +1923,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateTowers(deltaSeconds: number): void {
-    const placed: PlacedBuilding[] = this.towers.map((candidate) => ({ slotId: candidate.slotId, type: candidate.type }));
+    const placed: PlacedBuilding[] = [];
+    for (const t of this.towers) placed.push({ slotId: t.slotId, type: t.type });
 
     for (const tower of this.towers) {
       const definition = BUILDING_DEFINITIONS[tower.type];
@@ -1973,9 +1969,13 @@ export class GameScene extends Phaser.Scene {
           this.removeEnemy(target as any);
         }
         if (tower.type === 'fire' && definition.splashRadius > 0) {
+          const splashSq = definition.splashRadius * definition.splashRadius;
+          const tPos = target.position;
           for (const enemy of this.enemies) {
             if (enemy.id === (target as any).id) continue;
-            if (distanceSquared(enemy.position, target.position) <= definition.splashRadius ** 2) {
+            const dx = enemy.position.x - tPos.x;
+            const dy = enemy.position.y - tPos.y;
+            if (dx * dx + dy * dy <= splashSq) {
               const splashResult = applyDamage(enemy.health, damage * 0.5);
               enemy.health = splashResult.health;
               if (splashResult.dead) {
@@ -2003,9 +2003,13 @@ export class GameScene extends Phaser.Scene {
           this.results = addBuildingKill(this.results, tower.id);
           killedIds.add(target.id);
         }
+        const splashSq = definition.splashRadius * definition.splashRadius;
+        const tPos = target.position;
         for (const enemy of this.enemies) {
           if (enemy.id === target.id) continue;
-          if (distanceSquared(enemy.position, target.position) <= definition.splashRadius ** 2) {
+          const dx = enemy.position.x - tPos.x;
+          const dy = enemy.position.y - tPos.y;
+          if (dx * dx + dy * dy <= splashSq) {
             const splashResult = applyDamage(enemy.health, damage);
             enemy.health = splashResult.health;
             if (splashResult.dead) {
