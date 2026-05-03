@@ -259,6 +259,7 @@ export class GameScene extends Phaser.Scene {
   private forkOverlay?: Phaser.GameObjects.Container;
   private forkButtons: Phaser.GameObjects.Rectangle[] = [];
   private forkTexts: Phaser.GameObjects.Text[] = [];
+  private forkTitle?: Phaser.GameObjects.Text;
   private forkChoices: { label: string; description: string; modifier: RouteModifier }[] = [];
   private currentFork?: RouteFork;
   private wallet: ResourceWallet = createResourceWallet();
@@ -2779,7 +2780,7 @@ export class GameScene extends Phaser.Scene {
 
     // Title & buttons directly in scene (Container children can't receive pointer events
     // and their depth is clamped to container depth)
-    this.add.text(640, 195, '分岔路口', {
+    this.forkTitle = this.add.text(640, 195, '分岔路口', {
       color: '#d4a843', fontFamily: 'Arial, "Microsoft YaHei", sans-serif', fontSize: '28px', fontStyle: 'bold',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 26);
 
@@ -2817,6 +2818,7 @@ export class GameScene extends Phaser.Scene {
 
   private hideForkOverlay(): void {
     if (this.forkOverlay) { this.forkOverlay.destroy(true); this.forkOverlay = undefined; }
+    if (this.forkTitle) { this.forkTitle.destroy(); this.forkTitle = undefined; }
     for (const b of this.forkButtons) b.destroy();
     this.forkButtons = [];
     for (const t of this.forkTexts) t.destroy();
