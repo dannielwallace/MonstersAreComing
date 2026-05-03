@@ -356,6 +356,10 @@ export class GameScene extends Phaser.Scene {
   private wallCountText?: Phaser.GameObjects.Text;
   private fpsText?: Phaser.GameObjects.Text;
   private obstacleText?: Phaser.GameObjects.Text;
+  private blockedWarning?: Phaser.GameObjects.Container;
+  private blockedWarningBg?: Phaser.GameObjects.Rectangle;
+  private blockedWarningText?: Phaser.GameObjects.Text;
+  private blockedWarningGlow?: Phaser.GameObjects.Rectangle;
   private frameCount = 0;
   private lastFpsTime = 0;
   private currentFps = 0;
@@ -3128,6 +3132,73 @@ export class GameScene extends Phaser.Scene {
         this.obstacleText.setText(`状态: 受阻 | ${this._lastBlockerInfo} | 前沿 x=${Math.round(this._lastForwardEdge)}`)
           .setColor('#ff6644');
       }
+    }
+
+    // Blocked warning banner
+    if (this._caravanBlocked) {
+      this.showBlockedWarning();
+    } else {
+      this.hideBlockedWarning();
+    }
+  }
+
+  private showBlockedWarning(): void {
+    if (this.blockedWarning) {
+      // Update text content and pulse
+      if (this.blockedWarningText) {
+        this.blockedWarningText.setText(`⚠ 受阻！${this._lastBlockerInfo}`);
+      }
+      // Pulsing glow
+      const pulse = 0.6 + Math.sin(this.elapsedSeconds * 8) * 0.4;
+      if (this.blockedWarningGlow) {
+        this.blockedWarningGlow.setFillStyle(0xff2200, pulse * 0.15);
+      }
+      if (this.blockedWarningBg) {
+        this.blockedWarningBg.setFillStyle(0x3a0000, 0.85 + pulse * 0.15);
+      }
+      return;
+    }
+
+    const container = this.add.container(640, 48);
+    container.setScrollFactor(0);
+    container.setDepth(OVERLAY_DEPTH + 10);
+
+    // Dark red background bar
+    const bg = this.add.rectangle(0, 0, 420, 50, 0x3a0000, 0.92)
+      .setStrokeStyle(2, 0xff4400, 0.8);
+    bg.setScrollFactor(0);
+    bg.setDepth(OVERLAY_DEPTH + 10);
+    this.blockedWarningBg = bg;
+
+    // Glow rectangle behind
+    const glow = this.add.rectangle(0, 0, 460, 70, 0xff2200, 0.1);
+    glow.setScrollFactor(0);
+    glow.setDepth(OVERLAY_DEPTH + 9);
+    this.blockedWarningGlow = glow;
+
+    // Warning text
+    const text = this.add.text(0, 0, `⚠ 受阻！${this._lastBlockerInfo}`, {
+      color: '#ff4400',
+      fontFamily: 'Arial, "Microsoft YaHei", sans-serif',
+      fontSize: '24px',
+      fontStyle: 'bold',
+    });
+    text.setOrigin(0.5);
+    text.setScrollFactor(0);
+    text.setDepth(OVERLAY_DEPTH + 11);
+
+    container.add([bg, glow, text]);
+    this.blockedWarning = container;
+    this.blockedWarningText = text;
+  }
+
+  private hideBlockedWarning(): void {
+    if (this.blockedWarning) {
+      this.blockedWarning.destroy(true);
+      this.blockedWarning = undefined;
+      this.blockedWarningBg = undefined;
+      this.blockedWarningText = undefined;
+      this.blockedWarningGlow = undefined;
     }
   }
 

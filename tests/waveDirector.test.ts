@@ -12,29 +12,29 @@ import {
 
 describe('wave director constants and initial state', () => {
   it('uses the first wave delay and wave interval constants', () => {
-    expect(FIRST_WAVE_DELAY).toBe(30);
-    expect(WAVE_INTERVAL).toBe(20);
+    expect(FIRST_WAVE_DELAY).toBe(8);
+    expect(WAVE_INTERVAL).toBe(14);
   });
 
   it('creates the initial wave state', () => {
-    expect(createWaveState()).toEqual({ currentWave: 0, nextWaveTimer: 30 });
+    expect(createWaveState()).toEqual({ currentWave: 0, nextWaveTimer: 8 });
   });
 });
 
 describe('updateWaveState', () => {
   it('counts down without starting a wave', () => {
     expect(updateWaveState(createWaveState(), 3)).toEqual({
-      state: { currentWave: 0, nextWaveTimer: 27 },
+      state: { currentWave: 0, nextWaveTimer: 5 },
       startedWave: false,
       spawnedEnemies: [],
     });
   });
 
   it('starts the first wave when the first delay elapses', () => {
-    expect(updateWaveState(createWaveState(), 30)).toEqual({
-      state: { currentWave: 1, nextWaveTimer: 20 },
+    expect(updateWaveState(createWaveState(), 8)).toEqual({
+      state: { currentWave: 1, nextWaveTimer: 14 },
       startedWave: true,
-      spawnedEnemies: ['grunt', 'grunt'],
+      spawnedEnemies: ['grunt', 'grunt', 'grunt', 'grunt', 'grunt'],
     });
   });
 
@@ -42,12 +42,17 @@ describe('updateWaveState', () => {
     const state: WaveState = { currentWave: 2, nextWaveTimer: 4 };
 
     expect(updateWaveState(state, 100)).toEqual({
-      state: { currentWave: 3, nextWaveTimer: 20 },
+      state: { currentWave: 3, nextWaveTimer: 14 },
       startedWave: true,
       spawnedEnemies: [
         'thrower',
         'grunt',
         'runner',
+        'grunt',
+        'runner',
+        'grunt',
+        'runner',
+        'grunt',
       ],
     });
   });
@@ -70,11 +75,11 @@ describe('updateWaveState', () => {
 
 describe('getWaveBudget', () => {
   it('scales the budget from the normalized wave number', () => {
-    expect(getWaveBudget(0)).toBe(1);
-    expect(getWaveBudget(1)).toBe(2);
-    expect(getWaveBudget(2)).toBe(3);
-    expect(getWaveBudget(4)).toBe(5);
-    expect(getWaveBudget(Number.NaN)).toBe(1);
+    expect(getWaveBudget(0)).toBe(3);
+    expect(getWaveBudget(1)).toBe(5);
+    expect(getWaveBudget(2)).toBe(7);
+    expect(getWaveBudget(4)).toBe(11);
+    expect(getWaveBudget(Number.NaN)).toBe(3);
   });
 });
 
@@ -82,6 +87,12 @@ describe('wave enemy selection', () => {
   it('selects a deterministic wave composition', () => {
     expect(selectEnemyTypesForWave(4)).toEqual([
       'thrower',
+      'grunt',
+      'runner',
+      'grunt',
+      'runner',
+      'grunt',
+      'runner',
       'grunt',
       'runner',
       'grunt',

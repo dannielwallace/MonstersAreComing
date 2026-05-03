@@ -13,9 +13,9 @@ describe('getEnemyDefinition', () => {
       label: '普',
       color: 0xef4444,
       radius: 13,
-      health: 20,
-      speed: 65,
-      contactDamage: 2,
+      health: 30,
+      speed: 72,
+      contactDamage: 5,
       experienceReward: 5,
       budgetCost: 1,
       unlockWave: 1,
@@ -29,9 +29,9 @@ describe('getEnemyDefinition', () => {
       label: '快',
       color: 0xf97316,
       radius: 10,
-      health: 12,
-      speed: 105,
-      contactDamage: 2,
+      health: 18,
+      speed: 118,
+      contactDamage: 4,
       experienceReward: 4,
       budgetCost: 1,
       unlockWave: 2,
@@ -45,9 +45,9 @@ describe('getEnemyDefinition', () => {
       label: '甲',
       color: 0x7f1d1d,
       radius: 18,
-      health: 60,
-      speed: 40,
-      contactDamage: 4,
+      health: 85,
+      speed: 45,
+      contactDamage: 9,
       experienceReward: 10,
       budgetCost: 3,
       unlockWave: 4,
@@ -67,21 +67,21 @@ describe('getEnemyDefinition', () => {
     const def = getEnemyDefinition('thrower');
     expect(def?.name).toBe('投石怪');
     expect(def?.unlockWave).toBe(3);
-    expect(def?.rangedAttackDamage).toBe(3);
+    expect(def?.rangedAttackDamage).toBe(5);
   });
 
   it('returns the burst definition', () => {
     const def = getEnemyDefinition('burst');
     expect(def?.name).toBe('爆裂虫');
     expect(def?.unlockWave).toBe(5);
-    expect(def?.contactDamage).toBe(12);
+    expect(def?.contactDamage).toBe(25);
   });
 
   it('returns the boss definition', () => {
     const def = getEnemyDefinition('boss');
     expect(def?.name).toBe('首领');
     expect(def?.unlockWave).toBe(8);
-    expect(def?.minionSpawnInterval).toBe(6);
+    expect(def?.minionSpawnInterval).toBe(5);
   });
 });
 

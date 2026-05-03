@@ -15,8 +15,8 @@ export interface WaveUpdateResult {
   spawnedEnemies: EnemyTypeId[];
 }
 
-export const FIRST_WAVE_DELAY = 30;
-export const WAVE_INTERVAL = 20;
+export const FIRST_WAVE_DELAY = 8;
+export const WAVE_INTERVAL = 14;
 
 export function createWaveState(): WaveState {
   return {
@@ -30,7 +30,7 @@ export function getWaveBudget(waveNumber: number): number {
     ? Math.max(0, Math.floor(waveNumber))
     : 0;
 
-  return Math.max(1, 1 + normalizedWave);
+  return 3 + normalizedWave * 2;
 }
 
 export function selectEnemyTypesForWave(waveNumber: number): EnemyTypeId[] {
