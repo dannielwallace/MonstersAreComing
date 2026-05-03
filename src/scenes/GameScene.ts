@@ -135,7 +135,7 @@ import {
 
 const PLAYER_SPEED = 260;
 const CARAVAN_SPEED = 35;
-const GATHER_RANGE = 55;
+const GATHER_RANGE = 45;
 const DEPOSIT_RANGE = 88;
 const STONE_REPAIR_RATE = 5;
 const ENEMY_CONTACT_RANGE = 34;
@@ -301,7 +301,7 @@ export class GameScene extends Phaser.Scene {
   private buildSlotHighlights: Map<string, Phaser.GameObjects.Rectangle> = new Map();
 
   // Card hand
-  private cardHand: Exclude<BuildingType, 'wall'>[] = [];
+  private cardHand: BuildingType[] = [];
   private cardPanels: Phaser.GameObjects.Rectangle[] = [];  // interactive backgrounds
   private cardLabels: Phaser.GameObjects.Text[] = [];
   private cardCosts: Phaser.GameObjects.Text[] = [];
@@ -2451,11 +2451,12 @@ export class GameScene extends Phaser.Scene {
         if (justCompleted) {
           const [upgrade] = pickUpgradeChoices(UPGRADE_POOL, 1, Math.random);
           this.stats = applyUpgrade(this.stats, upgrade.id);
-          const cardMap: Partial<Record<UpgradeId, Exclude<BuildingType, 'wall'>>> = {
+          const cardMap: Partial<Record<UpgradeId, BuildingType>> = {
             'building-card-arrow': 'arrow',
             'building-card-fire': 'fire',
             'building-card-ice': 'ice',
             'building-card-catapult': 'catapult',
+            'building-card-wall': 'wall',
           };
           const cardType = cardMap[upgrade.id as UpgradeId];
           if (cardType) this.addCardToHand(cardType);
@@ -2718,11 +2719,12 @@ export class GameScene extends Phaser.Scene {
     this.stats = applyUpgrade(this.stats, choice.id);
 
     // Building card upgrades: add card to hand
-    const cardMap: Partial<Record<UpgradeId, Exclude<BuildingType, 'wall'>>> = {
+    const cardMap: Partial<Record<UpgradeId, BuildingType>> = {
       'building-card-arrow': 'arrow',
       'building-card-fire': 'fire',
       'building-card-ice': 'ice',
       'building-card-catapult': 'catapult',
+      'building-card-wall': 'wall',
     };
     const cardType = cardMap[choice.id as UpgradeId];
     if (cardType) this.addCardToHand(cardType);
@@ -3567,7 +3569,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createCardAt(index: number, x: number, y: number, type: Exclude<BuildingType, 'wall'>, cardWidth: number, cardHeight: number): void {
+  private createCardAt(index: number, x: number, y: number, type: BuildingType, cardWidth: number, cardHeight: number): void {
     const isSelected = index === this.selectedCardIndex;
     const canAffordThis = canBuild(this.wallet, type);
 
@@ -3712,7 +3714,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private addCardToHand(type: Exclude<BuildingType, 'wall'>): void {
+  private addCardToHand(type: BuildingType): void {
     this.cardHand.push(type);
     this.rebuildCardHand();
   }
@@ -3750,7 +3752,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.wallet = result.wallet;
-    this.buildTower(slot, center, type);
+    if (type === 'wall') {
+      this.buildWall(slot, center);
+    } else {
+      this.buildTower(slot, center, type);
+    }
 
     // Remove the used card
     this.cardHand.splice(this.selectedCardIndex, 1);

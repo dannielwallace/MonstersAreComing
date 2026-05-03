@@ -16,6 +16,7 @@ export type UpgradeId =
   | 'building-card-fire'
   | 'building-card-ice'
   | 'building-card-catapult'
+  | 'building-card-wall'
   | 'summon-damage'
   | 'summon-count'
   | 'summon-death-harvest'
@@ -175,6 +176,12 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
     id: 'building-card-catapult',
     name: '投石车蓝图',
     description: '获得一个投石车建造卡',
+    rarity: 'common',
+  },
+  {
+    id: 'building-card-wall',
+    name: '城墙蓝图',
+    description: '获得一个城墙建造卡',
     rarity: 'common',
   },
   // Rare upgrades — stronger / specialized effects
@@ -341,6 +348,7 @@ export function applyUpgrade(stats: RunStats, upgradeId: UpgradeId): RunStats {
     case 'building-card-fire':
     case 'building-card-ice':
     case 'building-card-catapult':
+    case 'building-card-wall':
       // Building card upgrades are handled by the scene (they add cards to hand)
       return stats;
     case 'summon-damage':
