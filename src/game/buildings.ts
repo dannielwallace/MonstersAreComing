@@ -87,7 +87,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   fire: {
     type: 'fire',
-    name: 'Fire Tower',
+    name: '火塔',
     shortLabel: 'F',
     category: 'attack',
     cost: { wood: 20, gold: 8 },
@@ -98,7 +98,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   ice: {
     type: 'ice',
-    name: 'Ice Tower',
+    name: '冰塔',
     shortLabel: 'I',
     category: 'attack',
     cost: { stone: 14, gold: 6 },
@@ -109,7 +109,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   minion: {
     type: 'minion',
-    name: 'Summon Tower',
+    name: '召唤塔',
     shortLabel: 'S',
     category: 'summon',
     cost: { wood: 18, gold: 10 },
@@ -121,7 +121,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   'blast-minion': {
     type: 'blast-minion',
-    name: 'Bomber Tower',
+    name: '爆破塔',
     shortLabel: 'B',
     category: 'summon',
     cost: { stone: 18, gold: 12 },
@@ -133,7 +133,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   'attack-banner': {
     type: 'attack-banner',
-    name: 'War Banner',
+    name: '攻击战旗',
     shortLabel: 'D+',
     category: 'support',
     cost: { wood: 12, gold: 12 },
@@ -145,7 +145,7 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
   },
   'speed-banner': {
     type: 'speed-banner',
-    name: 'Drum Tower',
+    name: '战鼓',
     shortLabel: 'S+',
     category: 'support',
     cost: { wood: 12, gold: 12 },
@@ -158,10 +158,10 @@ export const BUILDING_DEFINITIONS: Record<BuildingType, BuildingDefinition> = {
 };
 
 const RESOURCE_LABELS: [keyof ResourceAmounts, string][] = [
-  ['wood', 'wood'],
-  ['stone', 'stone'],
-  ['gold', 'gold'],
-  ['xp', 'xp'],
+  ['wood', '木'],
+  ['stone', '石'],
+  ['gold', '金'],
+  ['xp', '经验'],
   ['meta', 'meta'],
 ];
 
@@ -175,7 +175,7 @@ export function getBuildingCostText(type: BuildingType): string {
     const amount = cost[resourceType];
     return amount && amount > 0 ? [`${amount} ${label}`] : [];
   });
-  return parts.length > 0 ? parts.join(', ') : 'Free';
+  return parts.length > 0 ? parts.join(', ') : '免费';
 }
 
 export function canBuild(wallet: ResourceWallet, type: BuildingType): boolean {
