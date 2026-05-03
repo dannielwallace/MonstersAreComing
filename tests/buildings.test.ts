@@ -31,8 +31,8 @@ describe('building catalog', () => {
   });
 
   it('formats mixed resource costs', () => {
-    expect(getBuildingCostText('catapult')).toBe('25 wood, 10 stone');
-    expect(getBuildingCostText('fire')).toBe('20 wood, 8 gold');
+    expect(getBuildingCostText('catapult')).toBe('25 木, 10 石');
+    expect(getBuildingCostText('fire')).toBe('20 木, 8 金');
   });
 
   it('checks affordability using the resource wallet', () => {

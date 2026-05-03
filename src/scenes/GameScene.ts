@@ -231,6 +231,36 @@ interface FloatingText {
   timer: number;
 }
 
+interface PooledProjectile {
+  circle: Phaser.GameObjects.Arc;
+  flash?: Phaser.GameObjects.Arc;
+  active: boolean;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  progress: number;
+  duration: number;
+  color: number;
+  radius: number;
+  hasSplash: boolean;
+  splashRadius: number;
+  useArc: boolean;
+  rotationSpeed: number;
+}
+
+interface PooledSplash {
+  circle: Phaser.GameObjects.Arc;
+  active: boolean;
+  timer: number;
+  duration: number;
+  maxRadius: number;
+}
+
+const PROJECTILE_POOL_SIZE = 80;
+const SPLASH_POOL_SIZE = 30;
+const CARAVAN_UPDATE_INTERVAL = 0.15;
+
 type GameKey = 'W' | 'A' | 'S' | 'D' | 'B' | 'R' | 'ONE' | 'TWO' | 'THREE' | 'SPACE' | 'ESCAPE' | 'P' | 'NINE';
 
 export class GameScene extends Phaser.Scene {
@@ -365,6 +395,13 @@ export class GameScene extends Phaser.Scene {
   private eventVisuals: Map<string, Phaser.GameObjects.Container> = new Map();
   private eventCountdownRings: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
+  // Projectile pooling
+  private projectilePool: PooledProjectile[] = [];
+  private splashPool: PooledSplash[] = [];
+  private caravanUpdateTimer = 0;
+  private _caravanBlocked = false;
+  private _caravanMoveAmount = 0;
+
   constructor() {
     super('GameScene');
   }
@@ -491,6 +528,8 @@ export class GameScene extends Phaser.Scene {
     this.updateFeedback(deltaSeconds);
     this.updateWaveBanner(deltaSeconds);
     this.applyPendingWallRepair();
+    this.updatePooledProjectiles(deltaMs);
+    this.updatePooledSplashes(deltaMs);
     this.hudThrottle += deltaSeconds;
     if (this.hudThrottle >= 0.25) {
       this.updateHudPanels();
@@ -573,6 +612,47 @@ export class GameScene extends Phaser.Scene {
     this.eventVisuals.clear();
     for (const ring of this.eventCountdownRings.values()) ring.destroy();
     this.eventCountdownRings.clear();
+
+    // Initialize projectile pools (only on first call)
+    if (this.projectilePool.length === 0) {
+      for (let i = 0; i < PROJECTILE_POOL_SIZE; i++) {
+        const circle = this.add.circle(0, 0, 4, 0xffffff, 0);
+        circle.setDepth(16);
+        circle.setActive(false);
+        this.projectilePool.push({
+          circle, flash: undefined, active: false,
+          fromX: 0, fromY: 0, toX: 0, toY: 0,
+          progress: 0, duration: 0, color: 0xffffff, radius: 4,
+          hasSplash: false, splashRadius: 0, useArc: false, rotationSpeed: 0,
+        });
+      }
+      for (let i = 0; i < SPLASH_POOL_SIZE; i++) {
+        const circle = this.add.circle(0, 0, 10, 0xff9800, 0);
+        circle.setStrokeStyle(2, 0xff9800, 0);
+        circle.setDepth(15);
+        circle.setActive(false);
+        this.splashPool.push({ circle, active: false, timer: 0, duration: 0, maxRadius: 0 });
+      }
+    } else {
+      // Reset all pool entries
+      for (const proj of this.projectilePool) {
+        proj.active = false;
+        proj.circle.setVisible(false);
+        proj.circle.setActive(false);
+        if (proj.flash) {
+          proj.flash.setVisible(false);
+          proj.flash.setActive(false);
+        }
+      }
+      for (const splash of this.splashPool) {
+        splash.active = false;
+        splash.circle.setVisible(false);
+        splash.circle.setActive(false);
+      }
+    }
+    this.caravanUpdateTimer = 0;
+    this._caravanBlocked = false;
+    this._caravanMoveAmount = 0;
   }
 
   // ═══════════════════════════════════════════════════
@@ -1941,149 +2021,130 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ═══════════════════════════════════════════════════
-  // PROJECTILES
+  // PROJECTILES (pooled, no tweens)
   // ═══════════════════════════════════════════════════
 
+  private spawnPooledProjectile(
+    from: Point, to: Point, color: number, radius: number,
+    duration: number, useArc = false, rotationSpeed = 0,
+  ): void {
+    const proj = this.projectilePool.find((p) => !p.active);
+    if (!proj) return; // pool exhausted, skip visual
+    proj.active = true;
+    proj.fromX = from.x; proj.fromY = from.y;
+    proj.toX = to.x; proj.toY = to.y;
+    proj.progress = 0;
+    proj.duration = duration;
+    proj.color = color;
+    proj.radius = radius;
+    proj.useArc = useArc;
+    proj.rotationSpeed = rotationSpeed;
+    proj.circle.setPosition(from.x, from.y);
+    this.setCircleRadius(proj.circle, radius);
+    proj.circle.setFillStyle(color, 1);
+    proj.circle.setVisible(true);
+    proj.circle.setActive(true);
+  }
+
+  private spawnPooledSplash(center: Point, radius: number): void {
+    const splash = this.splashPool.find((s) => !s.active);
+    if (!splash) return;
+    splash.active = true;
+    splash.timer = 0;
+    splash.duration = 200;
+    splash.maxRadius = radius;
+    splash.circle.setPosition(center.x, center.y);
+    this.setCircleRadius(splash.circle, radius);
+    splash.circle.setFillStyle(0xff9800, 0);
+    splash.circle.setStrokeStyle(2, 0xff9800, 0.4);
+    splash.circle.setVisible(true);
+    splash.circle.setActive(true);
+  }
+
+  private updatePooledProjectiles(deltaMs: number): void {
+    for (const proj of this.projectilePool) {
+      if (!proj.active) continue;
+      proj.progress += deltaMs / proj.duration;
+      if (proj.progress >= 1) {
+        // Show brief flash at destination
+        proj.circle.setPosition(proj.toX, proj.toY);
+        proj.circle.setFillStyle(proj.color, 0.7);
+        this.setCircleRadius(proj.circle, proj.radius * 2);
+        proj.active = false;
+        // Schedule fade: mark for cleanup next frame
+        proj.circle.setVisible(false);
+        proj.circle.setActive(false);
+        continue;
+      }
+      const t = proj.progress;
+      let x = proj.fromX + (proj.toX - proj.fromX) * t;
+      let y = proj.fromY + (proj.toY - proj.fromY) * t;
+      if (proj.useArc) {
+        y += -Math.sin(t * Math.PI) * 60;
+      }
+      proj.circle.setPosition(x, y);
+      if (proj.rotationSpeed !== 0) {
+        proj.circle.setRotation(proj.circle.rotation + proj.rotationSpeed * (deltaMs / 1000));
+      }
+    }
+  }
+
+  private updatePooledSplashes(deltaMs: number): void {
+    for (const splash of this.splashPool) {
+      if (!splash.active) continue;
+      splash.timer += deltaMs;
+      const t = splash.timer / splash.duration;
+      if (t >= 1) {
+        splash.active = false;
+        splash.circle.setVisible(false);
+        splash.circle.setActive(false);
+        continue;
+      }
+      const currentRadius = splash.maxRadius * (1 + t * 0.5);
+      this.setCircleRadius(splash.circle, currentRadius);
+      splash.circle.setStrokeStyle(2, 0xff9800, 0.4 * (1 - t));
+    }
+  }
+
   private drawArrowProjectile(from: Point, to: Point): void {
-    const arrow = this.add.circle(from.x, from.y, 3, 0xfacc15);
-    arrow.setDepth(16);
-    this.tweens.add({
-      targets: arrow, x: to.x, y: to.y, duration: 100, ease: 'Linear',
-      onComplete: () => {
-        const flash = this.add.circle(to.x, to.y, 5, 0xffffff, 0.8);
-        flash.setDepth(16);
-        this.tweens.add({ targets: flash, alpha: 0, scale: 2, duration: 80, onComplete: () => flash.destroy() });
-        arrow.destroy();
-      },
-    });
+    this.spawnPooledProjectile(from, to, 0xfacc15, 3, 100);
   }
 
   private drawCatapultProjectile(from: Point, to: Point): void {
-    const rock = this.add.circle(from.x, from.y, 5, 0xff9800);
-    rock.setDepth(16);
-    this.tweens.add({
-      targets: rock, x: to.x, y: to.y, duration: 350, ease: 'Sine.easeInOut',
-      onUpdate: (tween: Phaser.Tweens.Tween) => {
-        const p = tween.progress;
-        rock.setY(from.y + (to.y - from.y) * p - Math.sin(p * Math.PI) * 60);
-      },
-      onComplete: () => {
-        const boom = this.add.circle(to.x, to.y, 12, 0xff9800, 0.6);
-        boom.setDepth(16);
-        this.tweens.add({ targets: boom, alpha: 0, scale: 2.5, duration: 180, onComplete: () => boom.destroy() });
-        rock.destroy();
-      },
-    });
+    this.spawnPooledProjectile(from, to, 0xff9800, 5, 350, true);
   }
 
   private drawProjectileToTarget(from: Point, to: Point, color: number, speed: number): void {
-    const proj = this.add.circle(from.x, from.y, 4, color);
-    proj.setDepth(16);
-    this.tweens.add({
-      targets: proj, x: to.x, y: to.y, duration: (Math.sqrt(distanceSquared(from, to)) / speed) * 1000, ease: 'Linear',
-      onComplete: () => {
-        const flash = this.add.circle(to.x, to.y, 8, color, 0.5);
-        flash.setDepth(16);
-        this.tweens.add({ targets: flash, alpha: 0, scale: 2, duration: 120, onComplete: () => flash.destroy() });
-        proj.destroy();
-      },
-    });
+    const dist = Math.sqrt(distanceSquared(from, to));
+    const duration = (dist / speed) * 1000;
+    this.spawnPooledProjectile(from, to, color, 4, duration);
   }
 
   private drawWeaponProjectile(type: WeaponType, from: Point, to: Point): void {
     const dist = Math.sqrt(distanceSquared(from, to));
     switch (type) {
-      case 'axe': {
-        // Large orange chopping arc
-        const proj = this.add.circle(from.x, from.y, 6, 0xff8c42);
-        proj.setStrokeStyle(2, 0xcc6a20, 0.8);
-        proj.setDepth(16);
-        const dur = (dist / 300) * 1000;
-        this.tweens.add({
-          targets: proj, x: to.x, y: to.y, rotation: Math.PI * 2,
-          duration: dur, ease: 'Linear',
-          onComplete: () => {
-            const flash = this.add.circle(to.x, to.y, 12, 0xff8c42, 0.5);
-            flash.setDepth(16);
-            this.tweens.add({ targets: flash, alpha: 0, scale: 2, duration: 150, onComplete: () => flash.destroy() });
-            proj.destroy();
-          },
-        });
+      case 'axe':
+        this.spawnPooledProjectile(from, to, 0xff8c42, 6, (dist / 300) * 1000, false, Math.PI * 2);
         break;
-      }
-      case 'saw': {
-        // Yellow spinning disc with trail
-        const proj = this.add.circle(from.x, from.y, 5, 0xffd700);
-        proj.setStrokeStyle(1.5, 0xccaa00, 0.8);
-        proj.setDepth(16);
-        const dur = (dist / 420) * 1000;
-        this.tweens.add({
-          targets: proj, x: to.x, y: to.y, rotation: Math.PI * 4,
-          duration: dur, ease: 'Linear',
-          onUpdate: () => {
-            if (Math.random() < 0.3) {
-              const spark = this.add.circle(proj.x, proj.y, 2, 0xffd700, 0.4);
-              spark.setDepth(15);
-              this.tweens.add({ targets: spark, alpha: 0, scale: 0.5, duration: 200, onComplete: () => spark.destroy() });
-            }
-          },
-          onComplete: () => {
-            const flash = this.add.circle(to.x, to.y, 10, 0xffd700, 0.5);
-            flash.setDepth(16);
-            this.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 120, onComplete: () => flash.destroy() });
-            proj.destroy();
-          },
-        });
+      case 'saw':
+        this.spawnPooledProjectile(from, to, 0xffd700, 5, (dist / 420) * 1000, false, Math.PI * 4);
         break;
-      }
-      case 'drill': {
-        // Blue piercing drill, thick and fast
-        const proj = this.add.triangle(from.x, from.y, 0, -8, 6, 4, -6, 4, 0x42a5f5);
-        proj.setStrokeStyle(1.5, 0x1e88e5, 0.7);
-        proj.setDepth(16);
-        const dur = (dist / 500) * 1000;
-        this.tweens.add({
-          targets: proj, x: to.x, y: to.y, scaleX: 1.3, scaleY: 1.3,
-          duration: dur, ease: 'Power2',
-          onComplete: () => {
-            const flash = this.add.circle(to.x, to.y, 8, 0x42a5f5, 0.6);
-            flash.setDepth(16);
-            this.tweens.add({ targets: flash, alpha: 0, scale: 1.8, duration: 100, onComplete: () => flash.destroy() });
-            proj.destroy();
-          },
-        });
+      case 'drill':
+        this.spawnPooledProjectile(from, to, 0x42a5f5, 5, (dist / 500) * 1000);
         break;
-      }
-      case 'ritual-dagger': {
-        // Purple energy bolt with ghostly afterglow
-        const proj = this.add.circle(from.x, from.y, 4, 0xb388ff);
-        proj.setStrokeStyle(2, 0x7c4dff, 0.6);
-        proj.setDepth(16);
-        const dur = (dist / 380) * 1000;
-        const ghost = this.add.circle(from.x, from.y, 3, 0xb388ff, 0.3);
-        ghost.setDepth(15);
-        this.tweens.add({ targets: ghost, x: to.x, y: to.y, duration: dur + 80, ease: 'Linear' });
-        this.tweens.add({
-          targets: proj, x: to.x, y: to.y, alpha: 0.6,
-          duration: dur, ease: 'Sine.easeIn',
-          onComplete: () => {
-            const flash = this.add.circle(to.x, to.y, 14, 0xb388ff, 0.3);
-            flash.setDepth(16);
-            this.tweens.add({ targets: flash, alpha: 0, scale: 3, duration: 200, onComplete: () => flash.destroy() });
-            proj.destroy();
-            ghost.destroy();
-          },
-        });
+      case 'ritual-dagger':
+        this.spawnPooledProjectile(from, to, 0xb388ff, 4, (dist / 380) * 1000);
         break;
-      }
     }
   }
 
   private drawSplashCircle(center: Point, radius: number): void {
-    const circle = this.add.circle(center.x, center.y, radius, 0xff9800, 0);
-    circle.setStrokeStyle(2, 0xff9800, 0.4);
-    circle.setDepth(15);
-    this.tweens.add({ targets: circle, alpha: 0, scale: 1.5, duration: 200, onComplete: () => circle.destroy() });
+    this.spawnPooledSplash(center, radius);
+  }
+
+  // Helper: set circle radius without recreating geometry
+  private setCircleRadius(circle: Phaser.GameObjects.Arc, radius: number): void {
+    circle.setScale(radius / 4);
   }
 
   // ═══════════════════════════════════════════════════
@@ -2936,69 +2997,68 @@ export class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════
 
   private updateCaravan(deltaSeconds: number): void {
-    // ── Obstacle check: only obstacles strictly IN FRONT of the forward edge block ──
     const moveAmount = CARAVAN_SPEED * deltaSeconds;
 
-    // Build forward-facing cells from caravan body + placed buildings
-    const occupiedSlotIds = this.getOccupiedSlotIds();
-    const occupiedGridOffsets: Array<{ col: number; row: number }> = [];
-    for (const slot of GRID_BUILD_SLOTS) {
-      if (!occupiedSlotIds.has(slot.id)) continue;
-      occupiedGridOffsets.push(slot.gridOffset);
-    }
-    const forwardCells = buildForwardCells(this.caravanTopLeft, CARAVAN_GRID_SIZE, CELL_SIZE, occupiedGridOffsets);
+    // Only recompute forward-edge periodically (it changes slowly at 35px/s)
+    this.caravanUpdateTimer += deltaSeconds;
+    if (this.caravanUpdateTimer >= CARAVAN_UPDATE_INTERVAL) {
+      this.caravanUpdateTimer = 0;
 
-    // Compute forward edge and swept edge
-    const forwardEdge = computeForwardEdge(forwardCells);
-    const sweptEdge = forwardEdge + moveAmount;
-
-    let blocked = false;
-    let blockerInfo = '无障碍';
-
-    // Check enemies (only nearby enemies can block)
-    for (const enemy of this.enemies) {
-      if (isObstacleBlocking(
-        { position: enemy.position, radius: enemy.radius, active: true },
-        forwardEdge, sweptEdge, forwardCells,
-      )) {
-        blocked = true;
-        blockerInfo = `敌人(${enemy.id}) pos=${Math.round(enemy.position.x)},${Math.round(enemy.position.y)}`;
-        break;
+      const occupiedSlotIds = this.getOccupiedSlotIds();
+      const occupiedGridOffsets: Array<{ col: number; row: number }> = [];
+      for (const slot of GRID_BUILD_SLOTS) {
+        if (!occupiedSlotIds.has(slot.id)) continue;
+        occupiedGridOffsets.push(slot.gridOffset);
       }
-    }
+      const forwardCells = buildForwardCells(this.caravanTopLeft, CARAVAN_GRID_SIZE, CELL_SIZE, occupiedGridOffsets);
+      const forwardEdge = computeForwardEdge(forwardCells);
+      const sweptEdge = forwardEdge + CARAVAN_SPEED * CARAVAN_UPDATE_INTERVAL;
 
-    // Check resource nodes (only nodes ahead of forward edge, skip far-behind nodes)
-    if (!blocked) {
-      const allNodes = [
-        ...this.resourceSpawner.woodNodes,
-        ...this.resourceSpawner.stoneNodes,
-        ...this.resourceSpawner.goldNodes,
-      ];
-      for (const node of allNodes) {
-        if (node.remaining <= 0) continue;
-        // Only check nodes in front of forward edge (skip nodes far behind)
-        if (node.position.x + node.radius < forwardEdge) continue;
+      let blocked = false;
+      let blockerInfo = '无障碍';
+
+      for (const enemy of this.enemies) {
         if (isObstacleBlocking(
-          { position: node.position, radius: node.radius, active: node.remaining > 0 },
+          { position: enemy.position, radius: enemy.radius, active: true },
           forwardEdge, sweptEdge, forwardCells,
         )) {
           blocked = true;
-          blockerInfo = `${node.type}(剩余${Math.ceil(node.remaining)}) pos=${Math.round(node.position.x)},${Math.round(node.position.y)}`;
+          blockerInfo = `敌人(${enemy.id}) pos=${Math.round(enemy.position.x)},${Math.round(enemy.position.y)}`;
           break;
         }
       }
+
+      if (!blocked) {
+        const allNodes = [
+          ...this.resourceSpawner.woodNodes,
+          ...this.resourceSpawner.stoneNodes,
+          ...this.resourceSpawner.goldNodes,
+        ];
+        for (const node of allNodes) {
+          if (node.remaining <= 0) continue;
+          if (node.position.x + node.radius < forwardEdge) continue;
+          if (isObstacleBlocking(
+            { position: node.position, radius: node.radius, active: node.remaining > 0 },
+            forwardEdge, sweptEdge, forwardCells,
+          )) {
+            blocked = true;
+            blockerInfo = `${node.type}(剩余${Math.ceil(node.remaining)}) pos=${Math.round(node.position.x)},${Math.round(node.position.y)}`;
+            break;
+          }
+        }
+      }
+
+      this._caravanBlocked = blocked;
+      this._lastBlockerInfo = blockerInfo;
+      this._lastForwardEdge = forwardEdge;
     }
 
-    if (blocked) {
+    if (this._caravanBlocked) {
       // Caravan is blocked — stay stopped
     } else {
       // Path is clear — move forward
       this.caravanTopLeft.x += moveAmount;
     }
-
-    // Store obstacle info for HUD display
-    this._lastBlockerInfo = blockerInfo;
-    this._lastForwardEdge = forwardEdge;
 
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
     this.caravanBody.setPosition(caravanCenter.x, caravanCenter.y);
