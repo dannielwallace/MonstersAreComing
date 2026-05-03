@@ -323,6 +323,13 @@ export class GameScene extends Phaser.Scene {
   private statsLineText?: Phaser.GameObjects.Text;
   private towerCountText?: Phaser.GameObjects.Text;
   private wallCountText?: Phaser.GameObjects.Text;
+  private fpsText?: Phaser.GameObjects.Text;
+  private obstacleText?: Phaser.GameObjects.Text;
+  private frameCount = 0;
+  private lastFpsTime = 0;
+  private currentFps = 0;
+  private _lastBlockerInfo = '无障碍';
+  private _lastForwardEdge = 0;
   private wavePanel?: Phaser.GameObjects.Container;
   private waveText?: Phaser.GameObjects.Text;
   private xpBarBg?: Phaser.GameObjects.Rectangle;
@@ -476,6 +483,7 @@ export class GameScene extends Phaser.Scene {
     this.updateEnemies(deltaSeconds);
     // Caravan movement check runs AFTER combat so killed enemies don't block
     this.updateCaravan(deltaSeconds);
+    this.updateDebugHud();
     this.updateCamera();
     this.updateFloatingTexts(deltaSeconds);
     this.updateFeedback(deltaSeconds);
@@ -1089,8 +1097,10 @@ export class GameScene extends Phaser.Scene {
     label.setOrigin(0.5);
     label.setDepth(6);
 
-    const node: ResourceNode = { id: `wood-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'wood', radius: 18, color: 0x4caf50 };
-    this.resourceSpawner.woodNodes.push(node);
+    // Reuse spawner's node if it exists (dynamic spawn), otherwise create new (initial node)
+    const existing = this.resourceSpawner.woodNodes.find(n => n.position.x === x && n.position.y === y && n.remaining === amount);
+    const node = existing ?? { id: `wood-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'wood', radius: 18, color: 0x4caf50 };
+    if (!existing) this.resourceSpawner.woodNodes.push(node);
     const rendered: RenderedNode = { node, container, canopy: canopy1, label, gatherTimer: 0 };
     this.woodRenderedNodes.push(rendered);
     return rendered;
@@ -1118,8 +1128,10 @@ export class GameScene extends Phaser.Scene {
     label.setOrigin(0.5);
     label.setDepth(6);
 
-    const node: ResourceNode = { id: `stone-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'stone', radius: 14, color: 0x78909c };
-    this.resourceSpawner.stoneNodes.push(node);
+    // Reuse spawner's node if it exists (dynamic spawn), otherwise create new (initial node)
+    const existing = this.resourceSpawner.stoneNodes.find(n => n.position.x === x && n.position.y === y && n.remaining === amount);
+    const node = existing ?? { id: `stone-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'stone', radius: 14, color: 0x78909c };
+    if (!existing) this.resourceSpawner.stoneNodes.push(node);
     const rendered: StoneRenderedNode = { node, shape: container, label, gatherTimer: 0 };
     this.stoneRenderedNodes.push(rendered);
     return rendered;
@@ -1147,8 +1159,10 @@ export class GameScene extends Phaser.Scene {
     label.setOrigin(0.5);
     label.setDepth(6);
 
-    const node: ResourceNode = { id: `gold-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'gold', radius: 12, color: 0xd4a820 };
-    this.resourceSpawner.goldNodes.push(node);
+    // Reuse spawner's node if it exists (dynamic spawn), otherwise create new (initial node)
+    const existing = this.resourceSpawner.goldNodes.find(n => n.position.x === x && n.position.y === y && n.remaining === amount);
+    const node = existing ?? { id: `gold-${this.resourceSpawner.nextId++}`, position: { x, y }, remaining: amount, maxAmount: amount, type: 'gold', radius: 12, color: 0xd4a820 };
+    if (!existing) this.resourceSpawner.goldNodes.push(node);
     const rendered: GoldRenderedNode = { node, shape: container, label, gatherTimer: 0 };
     this.goldRenderedNodes.push(rendered);
     return rendered;
@@ -2929,6 +2943,7 @@ export class GameScene extends Phaser.Scene {
     const sweptEdge = forwardEdge + moveAmount;
 
     let blocked = false;
+    let blockerInfo = '无障碍';
 
     // Check enemies
     for (const enemy of this.enemies) {
@@ -2937,6 +2952,7 @@ export class GameScene extends Phaser.Scene {
         forwardEdge, sweptEdge, forwardCells,
       )) {
         blocked = true;
+        blockerInfo = `敌人(${enemy.id}) pos=${Math.round(enemy.position.x)},${Math.round(enemy.position.y)}`;
         break;
       }
     }
@@ -2954,6 +2970,7 @@ export class GameScene extends Phaser.Scene {
           forwardEdge, sweptEdge, forwardCells,
         )) {
           blocked = true;
+          blockerInfo = `${node.type}(剩余${Math.ceil(node.remaining)}) pos=${Math.round(node.position.x)},${Math.round(node.position.y)}`;
           break;
         }
       }
@@ -2965,6 +2982,10 @@ export class GameScene extends Phaser.Scene {
       // Path is clear — move forward
       this.caravanTopLeft.x += moveAmount;
     }
+
+    // Store obstacle info for HUD display
+    this._lastBlockerInfo = blockerInfo;
+    this._lastForwardEdge = forwardEdge;
 
     const caravanCenter = getCaravanCenter(this.caravanTopLeft);
     this.caravanBody.setPosition(caravanCenter.x, caravanCenter.y);
@@ -3005,6 +3026,36 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.buildMode) this.updateBuildSlotHighlights();
+  }
+
+  // ══════════════════════════════════════════════════
+  // DEBUG HUD
+  // ═══════════════════════════════════════════════════
+
+  private updateDebugHud(): void {
+    // FPS calculation (update every 0.5s)
+    this.frameCount++;
+    const now = performance.now();
+    if (now - this.lastFpsTime >= 500) {
+      this.currentFps = Math.round(this.frameCount * 1000 / (now - this.lastFpsTime));
+      this.frameCount = 0;
+      this.lastFpsTime = now;
+    }
+    if (this.fpsText) {
+      const color = this.currentFps >= 50 ? '#00ff88' : this.currentFps >= 30 ? '#ffaa00' : '#ff4444';
+      this.fpsText.setText(`FPS: ${this.currentFps}`).setColor(color);
+    }
+
+    // Obstacle info
+    if (this.obstacleText) {
+      if (this._lastBlockerInfo === '无障碍') {
+        this.obstacleText.setText(`状态: 行进中 | 前沿 x=${Math.round(this._lastForwardEdge)}`)
+          .setColor('#88ff88');
+      } else {
+        this.obstacleText.setText(`状态: 受阻 | ${this._lastBlockerInfo} | 前沿 x=${Math.round(this._lastForwardEdge)}`)
+          .setColor('#ff6644');
+      }
+    }
   }
 
   // ═══════════════════════════════════════════════════
@@ -3350,6 +3401,19 @@ export class GameScene extends Phaser.Scene {
     this.routeIndicatorText.setOrigin(0.5, 0);
     this.routeIndicatorText.setScrollFactor(0);
     this.routeIndicatorText.setDepth(OVERLAY_DEPTH + 5);
+
+    // FPS & Obstacle debug overlay (bottom-left)
+    this.fpsText = this.add.text(10, 680, 'FPS: 0', {
+      color: '#00ff88', fontFamily: 'monospace', fontSize: '12px',
+    });
+    this.fpsText.setScrollFactor(0);
+    this.fpsText.setDepth(OVERLAY_DEPTH + 5);
+
+    this.obstacleText = this.add.text(10, 700, '状态: 行进中', {
+      color: '#ffaa44', fontFamily: 'monospace', fontSize: '11px',
+    });
+    this.obstacleText.setScrollFactor(0);
+    this.obstacleText.setDepth(OVERLAY_DEPTH + 5);
 
     // Shop button (left of resource panel)
     const shopBtn = this.add.rectangle(1072, 18, 52, 28, 0x3a3020, 1)
